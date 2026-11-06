@@ -9,16 +9,20 @@
 html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--fg);font:14px system-ui,sans-serif;touch-action:none}
 canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
 #hud{position:fixed;left:8px;right:8px;top:calc(env(safe-area-inset-top,0px) + 8px);display:flex;justify-content:space-between;pointer-events:none}
-.pill{background:var(--card);border-radius:12px;padding:5px 10px;font-weight:700;font-size:15px}#ov{position:fixed;right:8px;top:calc(env(safe-area-inset-top,0px) + 62px);width:42px;height:42px;border:0;border-radius:12px;background:var(--card);font-size:20px}
+.pill{background:var(--card);border-radius:12px;padding:5px 10px;font-weight:700;font-size:15px}
 .pill small{display:block;font-weight:400;font-size:11px;opacity:.7}
-#panel{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-radius:16px 16px 0 0;padding:8px 10px calc(env(safe-area-inset-bottom,0px) + 10px);max-height:42vh;overflow-y:auto}
+#ov{position:fixed;right:8px;top:calc(env(safe-area-inset-top,0px) + 62px);width:42px;height:42px;border:0;border-radius:12px;background:var(--card);font-size:20px}
+#panel{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-radius:16px 16px 0 0;padding:8px 10px calc(env(safe-area-inset-bottom,0px) + 10px);max-height:44vh;overflow-y:auto}
 #tabs{display:flex;gap:6px;margin-bottom:8px}
-.tab{flex:1;padding:8px;border:0;border-radius:10px;background:var(--off);color:var(--fg);font-weight:600}
+.tab{flex:1;padding:8px 2px;border:0;border-radius:10px;background:var(--off);color:var(--fg);font-weight:600;font-size:13px}
 .tab.on{background:var(--ac);color:#fff}
 .b{display:block;width:100%;margin:5px 0;padding:11px;border:0;border-radius:10px;background:var(--btn);color:var(--fg);font-size:14px;font-weight:600;text-align:left}
 .b:disabled{opacity:.45}
 .row{display:flex;gap:6px}.row .b{flex:1}.row .b.sm{flex:0 0 38%;text-align:center}
-.info{margin:4px 0;opacity:.85}.lnk{margin:4px 0;padding:8px;border-radius:8px;background:var(--off);word-break:break-all;user-select:all;-webkit-user-select:all;font-size:12px}#toast{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 150px);background:var(--card);padding:8px 14px;border-radius:12px;opacity:0;transition:opacity .3s;pointer-events:none;font-weight:600;max-width:90%;text-align:center}
+.row.wrap{flex-wrap:wrap}.row.wrap .b.sm{flex:1 1 28%;padding:9px 4px}
+.info{margin:4px 0;opacity:.85}
+.lnk{margin:4px 0;padding:8px;border-radius:8px;background:var(--off);word-break:break-all;user-select:all;-webkit-user-select:all;font-size:12px}
+#toast{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 150px);background:var(--card);padding:8px 14px;border-radius:12px;opacity:0;transition:opacity .3s;pointer-events:none;font-weight:600;max-width:90%;text-align:center}
 #hint{position:fixed;left:0;right:0;top:112px;text-align:center;font-size:12px;opacity:.75;pointer-events:none}
 </style></head><body>
 <div id="hud"><div class="pill"><small>Онлайн</small>👥 <span id="on">1</span></div><div class="pill"><small>Деньги</small>$<span id="m">10</span></div><div class="pill"><small>Доход</small>+$<span id="inc">0</span>/с</div></div><button id="ov">👁</button><div id="toast"></div>
@@ -27,68 +31,85 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 const $=id=>document.getElementById(id);
-const fmt=n=>{if(n<1e3)return Math.floor(n)+'';const u=['K','M','B','T'];let i=-1;while(n>=1e3&&i<3){n/=1e3;i++}return n.toFixed(n<10?2:1)+u[i]};
-const S={money:10,house:0,rockets:[],expanded:false,stable:0,tab:'h'};
-const houseInc=l=>5*Math.pow(1.15,l-1),houseUp=l=>Math.round(15*Math.pow(1.28,l-1));
-const stInc=l=>1000*Math.pow(1.15,l-1),stUp=l=>Math.round(5000*Math.pow(1.3,l-1));
-const rockUp=l=>Math.round(25*Math.pow(1.022,l));
-const EXP=50000,ROCKET=50,NS=16,RING=100,HUE=Math.random();
-const income=()=>(S.house?houseInc(S.house):0)+(S.expanded?stInc(S.stable):0);
+const fmt=n=>{if(n<1e3)return Math.floor(n)+'';const u=['K','M','B','T','Q'];let i=-1;while(n>=1e3&&i<4){n/=1e3;i++}return n.toFixed(n<10?2:1)+u[i]};
+// ---- локации ----
+const K=['h','f','s','c','n'];
+const LOC={h:{n:'Город',ico:'🏠',inc:5,up:15,buy:10,g:1.28},f:{n:'Ферма',ico:'🐴',inc:1000,up:5000,buy:50000,g:1.3},
+ s:{n:'Солнечные панели',ico:'☀️',inc:25000,up:1e6,buy:2e6,g:1.3},c:{n:'Угольные печи',ico:'🏭',inc:4e5,up:2e7,buy:1e8,g:1.3},n:{n:'Атомные заводы',ico:'☢️',inc:6e6,up:3e8,buy:3e9,g:1.3}};
+const PREV={h:null,f:'h',s:'f',c:'s',n:'c'};
+const ZP={h:[-16,4],f:[-14,-16],s:[6,-20],c:[20,-6],n:[-6,20]},PP={h:[-16,11],f:[-7,-12],s:[6,-12],c:[15,-13],n:[3,14]};
+const ZR={h:9,f:7.5,s:8,c:7,n:8},ZC={h:0x7fb069,f:0x9a7b4f,s:0x8d9299,c:0x555a60,n:0xb9bec4};
+const S={money:10,lv:{h:0,f:0,s:0,c:0,n:0},pvo:{h:0,f:0,s:0,c:0,n:0},rockets:[],tab:'l'};
+const locInc=(k,l)=>l>0?LOC[k].inc*Math.pow(1.15,l-1):0;
+const upCost=(k,l)=>Math.round(LOC[k].up*Math.pow(LOC[k].g,l-1));
+const pvoUp=l=>Math.round(60*Math.pow(1.021,l)),rockUp=l=>Math.round(25*Math.pow(1.022,l));
+const ROCKET=50,NS=16,RING=190,HUE=Math.random();
+const income=()=>K.reduce((a,k)=>a+locInc(k,S.lv[k]),0);
 
 const renderer=new THREE.WebGLRenderer({antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 document.body.prepend(renderer.domElement);
-const scene=new THREE.Scene();scene.background=new THREE.Color(0x9ad4f5);scene.fog=new THREE.Fog(0x9ad4f5,120,420);
-const cam=new THREE.PerspectiveCamera(55,1,.1,800);
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x9ad4f5);scene.fog=new THREE.Fog(0x9ad4f5,250,1000);
+const cam=new THREE.PerspectiveCamera(55,1,.1,3000);
 scene.add(new THREE.HemisphereLight(0xffffff,0x6a8f5a,.9));
 const sun=new THREE.DirectionalLight(0xffffff,.8);sun.position.set(20,30,10);scene.add(sun);
-const M=(c)=>new THREE.MeshLambertMaterial({color:c});
+const M=c=>new THREE.MeshLambertMaterial({color:c});
 const mesh=(g,c,x=0,y=0,z=0)=>{const m=new THREE.Mesh(g,typeof c=='number'?M(c):c);m.position.set(x,y,z);return m};
-const sea=mesh(new THREE.PlaneGeometry(1500,1500),0x2a8fd6);sea.rotation.x=-Math.PI/2;sea.position.y=-1.2;scene.add(sea);
-function isle(r){const g=new THREE.Group();g.add(mesh(new THREE.CylinderGeometry(r,r+1.2,2,40),0xe8d08a,0,-.9,0));g.add(mesh(new THREE.CylinderGeometry(r-.8,r-.8,.3,40),0x58a84b,0,-.05,0));return g}
-function label(txt){const c=document.createElement('canvas');c.width=256;c.height=64;const x=c.getContext('2d');x.fillStyle='rgba(0,0,0,.55)';x.fillRect(0,0,256,64);x.fillStyle='#fff';x.font='bold 30px sans-serif';x.textAlign='center';x.fillText(txt.slice(0,16),128,43);const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),depthTest:false}));s.scale.set(10,2.5,1);s.position.y=11;return s}
+const sea=mesh(new THREE.PlaneGeometry(4000,4000),0x2a8fd6);sea.rotation.x=-Math.PI/2;sea.position.y=-1.2;scene.add(sea);
+function isle(r){const g=new THREE.Group();g.add(mesh(new THREE.CylinderGeometry(r,r+1.5,2,48),0xe8d08a,0,-.9,0));g.add(mesh(new THREE.CylinderGeometry(r-.8,r-.8,.3,48),0x58a84b,0,-.05,0));return g}
+function label(txt){const c=document.createElement('canvas');c.width=256;c.height=64;const x=c.getContext('2d');x.fillStyle='rgba(0,0,0,.55)';x.fillRect(0,0,256,64);x.fillStyle='#fff';x.font='bold 30px sans-serif';x.textAlign='center';x.fillText(txt.slice(0,16),128,43);const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),depthTest:false}));s.scale.set(14,3.5,1);s.position.y=17;return s}
 function setName(I,n){if(I.lab)I.g.remove(I.lab);I.lab=label(n);I.g.add(I.lab)}
 
-// ---- остров игрока ----
-const slots=[[5,-2],[9,-2],[5,2],[9,2]];
+// ---- большой остров игрока ----
+const slots=[[15,10],[21,10],[15,14],[21,14]];
 function skin(r){const s=.8+r.lvl/500*1.4;r.g.scale.setScalar(s);r.body.material.color.setHSL(r.lvl/500*.85,r.lvl>1?.7:0,r.lvl>1?.6:1)}
 function makeIsland(){
- const g=new THREE.Group();scene.add(g);const I={g,houses:[],rockets:[],slot:null};
- g.add(isle(14));g.add(mesh(new THREE.CylinderGeometry(6,6,.2,32),0x888c94,7,.15,0));
- const farm=new THREE.Group();farm.visible=false;g.add(farm);const fi=isle(11);fi.position.set(0,0,-24);farm.add(fi);
- const barn=new THREE.Group();barn.position.set(0,0,-24);
- barn.add(mesh(new THREE.BoxGeometry(5,2.6,4),0xb3392f,0,1.3,0));
- const roof=mesh(new THREE.CylinderGeometry(2.9,2.9,5.2,3),0x5d3a1a,0,3.2,0);roof.rotation.z=Math.PI/2;roof.rotation.y=Math.PI/2;barn.add(roof);
- barn.add(mesh(new THREE.BoxGeometry(1.4,1.8,.1),0xf2e6c9,0,.9,2.05));farm.add(barn);
- const horse=new THREE.Group();horse.position.set(4.5,0,-20);
- horse.add(mesh(new THREE.BoxGeometry(1.6,.7,.6),0x8b5a2b,0,1,0));horse.add(mesh(new THREE.BoxGeometry(.4,.8,.4),0x8b5a2b,.9,1.5,0));
- [[-.6,-.2],[-.6,.2],[.6,-.2],[.6,.2]].forEach(p=>horse.add(mesh(new THREE.BoxGeometry(.15,.7,.15),0x5d3a1a,p[0],.35,p[1])));farm.add(horse);
- for(let i=0;i<10;i++)farm.add(mesh(new THREE.CylinderGeometry(.15,.2,1,6),0x6b4423,-8+i*1.8,.5,-33+Math.sin(i)*.3));
- for(let i=0;i<10;i++){const h=new THREE.Group();h.visible=false;h.position.set(-11+(i%5)*2.6,0,-2.5+Math.floor(i/5)*3.4);
+ const g=new THREE.Group();scene.add(g);const I={g,houses:[],rockets:[],panels:[],furn:[],towers:[],pvo:{},slot:null};
+ g.add(isle(30));g.add(mesh(new THREE.CylinderGeometry(7,7,.2,32),0x888c94,18,.15,12));
+ const Z={};K.forEach(k=>{const z=new THREE.Group();z.position.set(ZP[k][0],0,ZP[k][1]);z.visible=false;z.add(mesh(new THREE.CylinderGeometry(ZR[k],ZR[k],.12,28),ZC[k],0,.1,0));g.add(z);Z[k]=z});I.Z=Z;
+ for(let i=0;i<10;i++){const h=new THREE.Group();h.visible=false;h.position.set((i%5-2)*3,0,(Math.floor(i/5)-.5)*3.6);
   h.add(mesh(new THREE.BoxGeometry(1.7,1.2,1.7),[0xf4e3c1,0xe9c6c6,0xc6d9e9,0xdbe9c6,0xf0d9a8][i%5],0,.6,0));
   const r=mesh(new THREE.ConeGeometry(1.4,1,4),0xa8452f,0,1.7,0);r.rotation.y=Math.PI/4;h.add(r);
-  h.add(mesh(new THREE.BoxGeometry(.4,.7,.1),0x5d3a1a,0,.35,.88));g.add(h);I.houses.push(h)}
- I.farm=farm;I.barn=barn;I.horse=horse;
+  h.add(mesh(new THREE.BoxGeometry(.4,.7,.1),0x5d3a1a,0,.35,.88));Z.h.add(h);I.houses.push(h)}
+ const barn=new THREE.Group();barn.add(mesh(new THREE.BoxGeometry(5,2.6,4),0xb3392f,0,1.3,0));
+ const roof=mesh(new THREE.CylinderGeometry(2.9,2.9,5.2,3),0x5d3a1a,0,3.2,0);roof.rotation.z=Math.PI/2;roof.rotation.y=Math.PI/2;barn.add(roof);
+ barn.add(mesh(new THREE.BoxGeometry(1.4,1.8,.1),0xf2e6c9,0,.9,2.05));Z.f.add(barn);I.barn=barn;
+ const horse=new THREE.Group();horse.position.set(4.5,0,3);
+ horse.add(mesh(new THREE.BoxGeometry(1.6,.7,.6),0x8b5a2b,0,1,0));horse.add(mesh(new THREE.BoxGeometry(.4,.8,.4),0x8b5a2b,.9,1.5,0));
+ [[-.6,-.2],[-.6,.2],[.6,-.2],[.6,.2]].forEach(p=>horse.add(mesh(new THREE.BoxGeometry(.15,.7,.15),0x5d3a1a,p[0],.35,p[1])));Z.f.add(horse);I.horse=horse;
+ for(let i=0;i<14;i++){const a=i/14*6.28;Z.f.add(mesh(new THREE.CylinderGeometry(.15,.2,1,6),0x6b4423,Math.cos(a)*6.5,.5,Math.sin(a)*6.5))}
+ for(let i=0;i<15;i++){const p=new THREE.Group();p.visible=false;p.position.set((i%5-2)*3,0,(Math.floor(i/5)-1)*3);
+  p.add(mesh(new THREE.BoxGeometry(.15,.9,.15),0x666666,0,.45,0));const pn=mesh(new THREE.BoxGeometry(2.4,.12,1.6),0x1c3d8f,0,1,0);pn.rotation.x=-.5;p.add(pn);Z.s.add(p);I.panels.push(p)}
+ for(let i=0;i<6;i++){const f=new THREE.Group();f.visible=false;f.position.set((i%3-1)*3.6,0,(Math.floor(i/3)-.5)*4.2);
+  f.add(mesh(new THREE.BoxGeometry(2.8,2.4,2.8),0x4a4a4a,0,1.2,0));f.add(mesh(new THREE.CylinderGeometry(.45,.55,4,10),0x333333,.7,4.2,.7));f.add(mesh(new THREE.BoxGeometry(1,.8,.1),0xff6d00,0,.9,1.45));Z.c.add(f);I.furn.push(f)}
+ for(let i=0;i<3;i++){const t=new THREE.Group();t.visible=false;t.position.set((i-1)*5.5,0,0);
+  t.add(mesh(new THREE.CylinderGeometry(1.7,2.7,8,16),0xd0d4d8,0,4,0));t.add(mesh(new THREE.SphereGeometry(1.8,14,8,0,Math.PI*2,0,Math.PI/2),0x9aa0a6,0,0,4.8));Z.n.add(t);I.towers.push(t)}
+ K.forEach(k=>{const t=new THREE.Group();t.position.set(PP[k][0],0,PP[k][1]);t.visible=false;
+  t.add(mesh(new THREE.CylinderGeometry(1.2,1.4,.6,12),0x6b7077,0,.3,0));t.add(mesh(new THREE.BoxGeometry(1.2,.8,1.2),0x4d5560,0,1,0));
+  [-.4,.4].forEach(x=>{const tb=mesh(new THREE.CylinderGeometry(.2,.2,2.4,8),0x2e7d32,x,2,0);tb.rotation.z=.5;t.add(tb)});t.add(mesh(new THREE.SphereGeometry(.3,8,8),0xff1744,0,1.6,-.6));g.add(t);I.pvo[k]=t});
  I.addRocket=i=>{const rg=new THREE.Group();const body=mesh(new THREE.CylinderGeometry(.45,.5,2.4,16),0xffffff,0,1.4,0);rg.add(body);rg.add(mesh(new THREE.ConeGeometry(.45,.9,16),0xd32f2f,0,3.05,0));
   for(let k=0;k<3;k++){const f=mesh(new THREE.BoxGeometry(.9,.8,.08),0x1565c0,0,.6,0);f.rotation.y=k*Math.PI/3;rg.add(f)}
   const fl=mesh(new THREE.ConeGeometry(.35,1.4,10),0xff9800,0,-.3,0);fl.rotation.x=Math.PI;fl.visible=false;rg.add(fl);
   rg.position.set(slots[i][0],.25,slots[i][1]);g.add(rg);const r={lvl:1,state:'idle',t:0,v:0,g:rg,body,fl};I.rockets.push(r);skin(r);return r};
- I.apply=st=>{const n=st.h?Math.ceil(st.h/3):0;I.houses.forEach((h,i)=>{h.visible=i<n;if(h.visible)h.scale.setScalar(1+(st.h-1)%3*.06)});
-  farm.visible=!!st.e;if(st.e)barn.scale.setScalar(1+st.s*.01);
+ I.apply=st=>{const lv=st.lv||{},pv=st.pvo||{};
+  K.forEach(k=>{const on=(lv[k]|0)>0;Z[k].visible=on;const t=I.pvo[k];t.visible=on&&(pv[k]|0)>0;if(t.visible)t.scale.setScalar(.8+pv[k]/500*1.2)});
+  const n=Math.ceil((lv.h|0)/3);I.houses.forEach((h,i)=>{h.visible=i<n;if(h.visible)h.scale.setScalar(1+((lv.h-1)%3)*.06)});
+  barn.scale.setScalar(1+(lv.f|0)*.01);
+  I.panels.forEach((p,i)=>p.visible=i<Math.ceil((lv.s|0)/2));I.furn.forEach((f,i)=>f.visible=i<Math.ceil((lv.c|0)/5));I.towers.forEach((t,i)=>t.visible=i<Math.ceil((lv.n|0)/10));
   (st.r||[]).slice(0,4).forEach((l,i)=>{const r=I.rockets[i]||I.addRocket(i);if(r.lvl!==l){r.lvl=l;skin(r)}})};
  return I}
 function place(I,s){const t=s/NS*Math.PI*2;I.g.position.set(Math.cos(t)*RING,0,Math.sin(t)*RING);I.g.rotation.y=Math.atan2(-Math.cos(t),-Math.sin(t));I.slot=s}
 
-// ---- центральный остров с сокровищами ----
+// ---- остров сокровищ ----
 const tr=new THREE.Group();scene.add(tr);tr.add(isle(20));
 const gold=new THREE.MeshLambertMaterial({color:0xffc400,emissive:0x664400});
 [[8,6],[-9,5],[-6,-9],[10,-7],[1,11]].forEach(p=>{const t=new THREE.Group();t.position.set(p[0],0,p[1]);const tk=mesh(new THREE.CylinderGeometry(.25,.4,5,8),0x7a5230,0,2.5,0);tk.rotation.z=.2;t.add(tk);
- for(let k=0;k<6;k++){const l=mesh(new THREE.ConeGeometry(.5,3.2,6),0x2e8b3a,0,5,0);l.rotation.z=1.4;l.rotation.y=k*Math.PI/3;l.position.set(Math.sin(k*Math.PI/3)*1.3+.5,5,Math.cos(k*Math.PI/3)*1.3);l.rotation.set(Math.cos(k*Math.PI/3)*1.2,0,-Math.sin(k*Math.PI/3)*1.2);t.add(l)}tr.add(t)});
-[[3,3,.5],[-4,2,-.4],[2,-5,1.2]].forEach(c=>{const ch=new THREE.Group();ch.position.set(c[0],0,c[1]);ch.rotation.y=c[2];ch.add(mesh(new THREE.BoxGeometry(2.2,1.2,1.4),0x6b4423,0,.6,0));ch.add(mesh(new THREE.BoxGeometry(2.3,.4,1.5),0x8b5a2b,0,1.35,0));ch.add(mesh(new THREE.BoxGeometry(2.3,.15,.3),gold,0,1.0,.75));ch.add(mesh(new THREE.BoxGeometry(1.9,.3,1.1),gold,0,1.3,0));tr.add(ch)});
+ for(let k=0;k<6;k++){const a=k*Math.PI/3,l=mesh(new THREE.ConeGeometry(.5,3.2,6),0x2e8b3a,Math.sin(a)*1.3+.5,5,Math.cos(a)*1.3);l.rotation.set(Math.cos(a)*1.2,0,-Math.sin(a)*1.2);t.add(l)}tr.add(t)});
+[[3,3,.5],[-4,2,-.4],[2,-5,1.2]].forEach(c=>{const ch=new THREE.Group();ch.position.set(c[0],0,c[1]);ch.rotation.y=c[2];ch.add(mesh(new THREE.BoxGeometry(2.2,1.2,1.4),0x6b4423,0,.6,0));ch.add(mesh(new THREE.BoxGeometry(2.3,.4,1.5),0x8b5a2b,0,1.35,0));ch.add(mesh(new THREE.BoxGeometry(2.3,.15,.3),gold,0,1,.75));ch.add(mesh(new THREE.BoxGeometry(1.9,.3,1.1),gold,0,1.3,0));tr.add(ch)});
 for(let i=0;i<40;i++){const a=Math.random()*6.28,d=1+Math.random()*3;tr.add(mesh(new THREE.CylinderGeometry(.35,.35,.1,12),gold,Math.cos(a)*d-1,.15+(i%4)*.1,Math.sin(a)*d+.5))}
 tr.add(mesh(new THREE.CylinderGeometry(1.3,1.3,60,16),new THREE.MeshBasicMaterial({color:0xffe066,transparent:true,opacity:.22}),0,30,0));
 const bigCoin=mesh(new THREE.CylinderGeometry(2.2,2.2,.4,28),gold,0,8,0);bigCoin.rotation.x=Math.PI/2;const coinG=new THREE.Group();coinG.add(bigCoin);tr.add(coinG);
-const tl=label('Остров сокровищ');tl.position.y=16;tr.add(tl);
+const tl=label('Остров сокровищ');tl.position.y=16;tr.add(tl);tr.scale.setScalar(1.6);
 
 // ---- люди ----
 function mkHuman(shirt){const hum=new THREE.Group();
@@ -99,16 +120,16 @@ function mkHuman(shirt){const hum=new THREE.Group();
 const swing=(h,s)=>{h.legs[0].rotation.x=s;h.legs[1].rotation.x=-s;h.arms[0].rotation.x=-s;h.arms[1].rotation.x=s};
 const myI=makeIsland();place(myI,0);setName(myI,'Твой остров');
 S.rockets=myI.rockets;
-const me=mkHuman(new THREE.Color().setHSL(HUE,.7,.5));const hum=me.g;hum.position.set(-2,0,6);myI.g.add(hum);
-let target=null,ang=.6,pitch=.58,dist=17,wt=0,ov=false;
-const walkable=(x,z)=>Math.hypot(x,z)<13.4||(S.expanded&&Math.hypot(x,z+24)<10.4);
+const me=mkHuman(new THREE.Color().setHSL(HUE,.7,.5));const hum=me.g;hum.position.set(0,0,8);myI.g.add(hum);
+let target=null,ang=.6,pitch=.58,dist=22,wt=0,ov=false;
+const walkable=(x,z)=>Math.hypot(x,z)<28.5;
 
 // ---- ввод ----
 const cvs=renderer.domElement,ray=new THREE.Raycaster(),keys={};
 let down=null,moved=false;
 cvs.addEventListener('pointerdown',e=>{down={x:e.clientX,y:e.clientY};moved=false});
 cvs.addEventListener('pointermove',e=>{if(!down)return;const dx=e.clientX-down.x,dy=e.clientY-down.y;if(Math.abs(dx)>3||Math.abs(dy)>3||moved){moved=true;ang-=dx*.008;pitch=Math.min(1.45,Math.max(.12,pitch+dy*.006));down={x:e.clientX,y:e.clientY}}});
-cvs.addEventListener('wheel',e=>{dist=Math.min(40,Math.max(8,dist+e.deltaY*.02))});
+cvs.addEventListener('wheel',e=>{dist=Math.min(50,Math.max(8,dist+e.deltaY*.03))});
 cvs.addEventListener('pointerup',e=>{if(down&&!moved&&!ov){const v=new THREE.Vector2(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);ray.setFromCamera(v,cam);
  const p=new THREE.Vector3();if(ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),0),p)){myI.g.updateMatrixWorld();const l=myI.g.worldToLocal(p);if(walkable(l.x,l.z))target=l}}down=null});
 addEventListener('keydown',e=>keys[e.code]=1);addEventListener('keyup',e=>keys[e.code]=0);
@@ -116,14 +137,14 @@ $('ov').onclick=()=>{ov=!ov};
 
 // ---- действия ----
 const A={
- buyHouse(){if(S.money>=10&&!S.house){S.money-=10;S.house=1}},
- upHouse(){const c=houseUp(S.house);if(S.house<30&&S.money>=c){S.money-=c;S.house++}},
- expand(){if(S.house==30&&!S.expanded&&S.money>=EXP){S.money-=EXP;S.expanded=true;S.stable=1;S.tab='f'}},
+ loc(k){const L=LOC[k],lv=S.lv[k];
+  if(lv==0){if(PREV[k]&&S.lv[PREV[k]]<30)return;if(S.money>=L.buy){S.money-=L.buy;S.lv[k]=1;if(k!='h')toast('Открыта локация: '+L.n)}}
+  else if(lv<30){const c=upCost(k,lv);if(S.money>=c){S.money-=c;S.lv[k]++}}},
+ pvo(k){const v=S.pvo[k];if(S.lv[k]<1||v>=500)return;const c=pvoUp(v);if(S.money>=c){S.money-=c;S.pvo[k]++}},
  buyRocket(){if(myI.rockets.length<4&&S.money>=ROCKET){S.money-=ROCKET;myI.addRocket(myI.rockets.length)}},
  upRocket(i){const r=S.rockets[i],c=rockUp(r.lvl);if(r.lvl<500&&S.money>=c){S.money-=c;r.lvl++;skin(r)}},
  launch(i){const r=S.rockets[i];if(r.state=='idle'){r.state='fly';r.v=2;r.fl.visible=true;S.money+=r.lvl*20}},
- upStable(){const c=stUp(S.stable);if(S.expanded&&S.stable<30&&S.money>=c){S.money-=c;S.stable++}},
- attack(k){const to=k.slice(1),r=S.rockets.find(r=>r.state=='idle');if(!r||!ws||ws.readyState!==1)return;r.state='fly';r.v=2;r.fl.visible=true;S.money+=r.lvl*20;ws.send(JSON.stringify({t:'strike',to,l:r.lvl}))},
+ attack(v){const [to,loc]=v.slice(1).split(':'),r=S.rockets.find(r=>r.state=='idle');if(!r||!ws||ws.readyState!==1)return;r.state='fly';r.v=2;r.fl.visible=true;S.money+=r.lvl*20;ws.send(JSON.stringify({t:'strike',to,loc,l:r.lvl}))},
  copy(){const done=()=>toast('Ссылка скопирована');try{navigator.clipboard.writeText(LINK).then(done,()=>toast('Выдели ссылку и скопируй вручную'))}catch(e){toast('Выдели ссылку и скопируй вручную')}},
  tab(t){S.tab=t}
 };
@@ -131,35 +152,32 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(!b
 
 // ---- интерфейс ----
 let last='';
-function btn(a,txt,cost,i,cls=''){const ok=S.money>=cost;return `<button class="b ${cls}" data-a="${a}" ${i!==undefined?`data-i="${i}"`:''} ${ok?'':'disabled'}>${txt}${cost?` — $${fmt(cost)}`:''}</button>`}
+function btn(a,txt,cost,i){const ok=S.money>=cost;return `<button class="b" data-a="${a}" ${i!==undefined?`data-i="${i}"`:''} ${ok?'':'disabled'}>${txt}${cost?` — $${fmt(cost)}`:''}</button>`}
 function ui(){
  let h='';
- if(S.tab=='h'){
-  if(!S.house)h+=btn('buyHouse','🏠 Купить дом (+$5/с)',10);
-  else{h+=`<div class="info">Дом: ур. ${S.house}/30 · домов: ${Math.ceil(S.house/3)}/10 · +$${fmt(houseInc(S.house))}/с</div>`;
-   if(S.house<30)h+=btn('upHouse','⬆ Улучшить дом',houseUp(S.house));
-   else if(!S.expanded)h+=btn('expand','🏝 Купить расширение острова',EXP);
-   else h+='<div class="info">Остров расширен ✔</div>'}
+ if(S.tab=='l'){
+  K.forEach(k=>{const L=LOC[k],lv=S.lv[k],p=PREV[k];
+   if(lv==0){if(p&&S.lv[p]<30)h+=`<div class="info">🔒 ${L.ico} ${L.n}: сначала ${LOC[p].n} до ур. 30</div>`;else h+=btn('loc',`🔓 Открыть: ${L.ico} ${L.n} (+$${fmt(L.inc)}/с)`,L.buy,k)}
+   else if(lv<30)h+=btn('loc',`⬆ ${L.ico} ${L.n} ур. ${lv}/30 · +$${fmt(locInc(k,lv))}/с`,upCost(k,lv),k);
+   else h+=`<div class="info">✔ ${L.ico} ${L.n}: макс. ур. 30 · +$${fmt(locInc(k,30))}/с</div>`})
  }else if(S.tab=='r'){
   h+=`<div class="info">Ракеты: ${S.rockets.length}/4 · за запуск бонус $20 × уровень</div>`;
   S.rockets.forEach((r,i)=>{h+=`<div class="row">${r.lvl<500?btn('upRocket',`🚀 №${i+1} ур. ${r.lvl}/500`,rockUp(r.lvl),i):`<button class="b" disabled>🚀 №${i+1} МАКС</button>`}<button class="b sm" data-a="launch" data-i="${i}" ${r.state=='idle'?'':'disabled'}>${r.state=='idle'?'Запуск':'Полёт…'}</button></div>`});
   if(S.rockets.length<4)h+=btn('buyRocket','➕ Купить ракету (ур. 1)',ROCKET);
-  h+='<div class="info">Цели: готовая ракета взрывает город врага, он теряет уровни дома</div>';
+  h+='<div class="info">Цели: выбери локацию игрока (🛡 — уровень его ПВО). Попадание снижает уровень локации.</div>';
   if(!remotes.size)h+='<div class="info">Других игроков пока нет.</div>';
   const ready=S.rockets.some(r=>r.state=='idle');
-  remotes.forEach((r,k)=>{h+=`<button class="b" data-a="attack" data-i="x${k}" ${ready?'':'disabled'}>💥 Атаковать: ${esc(r.name)}</button>`});
- }else if(S.tab=='s'){
-  h+=`<div class="info">Сервер: ${conn?'🟢 подключён':'🔴 нет подключения'} · игроков онлайн: ${online}</div>`;
-  h+=`<div class="info">Ссылка на сервер:</div><div class="lnk">${LINK}</div><button class="b" data-a="copy">📋 Скопировать ссылку</button>`;
-  h+='<div class="info">Отправь эту ссылку друзьям: все, кто её откроет, попадают на один сервер.</div>';
+  remotes.forEach((r,id)=>{const lv=(r.st&&r.st.lv)||{},pv=(r.st&&r.st.pvo)||{};
+   h+=`<div class="info">🎯 ${esc(r.name)}</div><div class="row wrap">`+K.filter(k=>lv[k]>0).map(k=>`<button class="b sm" data-a="attack" data-i="x${id}:${k}" ${ready?'':'disabled'}>${LOC[k].ico}${pv[k]?' 🛡'+pv[k]:''}</button>`).join('')+'</div>'})
+ }else if(S.tab=='p'){
+  h+='<div class="info">Одна ПВО на локацию: сбивает до 4 ракет подряд, потом перезаряжается (1 ракета за 8 с). Чем выше уровень ПВО относительно ракеты, тем больше шанс.</div>';
+  K.filter(k=>S.lv[k]>0).forEach(k=>{const v=S.pvo[k],L=LOC[k];h+=v>=500?`<div class="info">🛡 ${L.ico} ${L.n}: ПВО макс. 500</div>`:btn('pvo',`🛡 ${L.ico} ${L.n}: ПВО ур. ${v}/500${v?'':' (построить)'}`,pvoUp(v),k)})
  }else{
-  if(!S.expanded)h+='<div class="info">🔒 Ферма закрыта. Прокачай дом до 30 уровня и купи расширение острова.</div>';
-  else{h+=`<div class="info">Конюшня: ур. ${S.stable}/30 · +$${fmt(stInc(S.stable))}/с</div>`;
-   h+=S.stable<30?btn('upStable','⬆ Улучшить конюшню',stUp(S.stable)):'<div class="info">Максимальный уровень ✔</div>'}
- }
- const tabs=[['h','🏠 Дом'],['r','🚀 Ракеты'],['f','🐴 Ферма'],['s','⚙']].map(t=>`<button class="tab ${S.tab==t[0]?'on':''}" data-a="tab" data-i="${t[0]}">${t[1]}</button>`).join('');
- const all=tabs+'|'+h;if(all==last)return;last=all;$('tabs').innerHTML=tabs;$('body').innerHTML=h;
-}
+  h+=`<div class="info">Сервер: ${conn?'🟢 подключён':'🔴 нет подключения'} · игроков онлайн: ${online}</div>`;
+  h+=`<div class="info">Ссылка на сервер:</div><div class="lnk">${esc(LINK)}</div><button class="b" data-a="copy">📋 Скопировать ссылку</button>`;
+  h+='<div class="info">Отправь эту ссылку друзьям: все, кто её откроет, попадают на один сервер.</div>'}
+ const tabs=[['l','🏙 Локации'],['r','🚀 Ракеты'],['p','🛡 ПВО'],['s','⚙']].map(t=>`<button class="tab ${S.tab==t[0]?'on':''}" data-a="tab" data-i="${t[0]}">${t[1]}</button>`).join('');
+ const all=tabs+'|'+h;if(all==last)return;last=all;$('tabs').innerHTML=tabs;$('body').innerHTML=h}
 
 // ---- онлайн (свой сервер, WebSocket) ----
 let myName='';try{myName=localStorage.getItem('nick')||''}catch(e){}
@@ -169,15 +187,15 @@ const remotes=new Map(),missiles=[],booms=[],LINK=location.href.split('#')[0];
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function toast(s){const e=$('toast');e.textContent=s;e.style.opacity=1;clearTimeout(tt);tt=setTimeout(()=>e.style.opacity=0,3500)}
 const islandOf=id=>id===myId?myI:(remotes.get(id)||{}).I;
-function onStrike(m){const from=islandOf(m.from),to=islandOf(m.to);if(!from||!to||from===to)return;
- const a=from.g.localToWorld(new THREE.Vector3(7,3,0)),b=to.g.localToWorld(new THREE.Vector3(-6,1,0));
+function onStrike(m){const from=islandOf(m.from),to=islandOf(m.to),loc=m.loc;if(!from||!to||from===to||!ZP[loc])return;
+ const a=from.g.localToWorld(new THREE.Vector3(18,3,12)),b=to.g.localToWorld(new THREE.Vector3(ZP[loc][0],1,ZP[loc][1]));
  const g=new THREE.Group();g.add(mesh(new THREE.ConeGeometry(.6,1.8,10),0xd32f2f));const f=mesh(new THREE.ConeGeometry(.4,1.6,8),0xff9800,0,-1.5,0);f.rotation.x=Math.PI;g.add(f);g.scale.setScalar(2);scene.add(g);
- const t=remotes.get(m.to);missiles.push({g,a,b,t:0,hit:m.to===myId,mine:m.from===myId,l:Math.min(500,Math.max(1,m.l|0)),name:t?t.name:''})}
-function boom(p){const m=mesh(new THREE.SphereGeometry(1,16,12),new THREE.MeshBasicMaterial({color:0xff7a18,transparent:true}));m.position.copy(p);scene.add(m);booms.push({m,t:0})}
-function hitMe(l){const dmg=Math.min(5,Math.ceil(l/100));if(S.house>1){S.house=Math.max(1,S.house-dmg);toast('💥 По тебе ударили! Дом −'+dmg+' ур.')}else toast('💥 По тебе ударили!')}
-function applyState(r,d){if(!d)return;r.I.apply({h:d.h|0,e:d.e,s:d.s|0,r:d.r||[]});r.tx=d.x||0;r.tz=d.z||0}
+ const t=remotes.get(m.to);missiles.push({g,a,b,t:0,loc,ic:!!m.ic,hit:m.to===myId,mine:m.from===myId,l:Math.min(500,Math.max(1,m.l|0)),name:t?t.name:''})}
+function boom(p,c=0xff7a18){const m=mesh(new THREE.SphereGeometry(1,16,12),new THREE.MeshBasicMaterial({color:c,transparent:true}));m.position.copy(p);scene.add(m);booms.push({m,t:0})}
+function hitMe(l,loc){const dmg=Math.min(5,Math.ceil(l/100)),L=LOC[loc];if(S.lv[loc]>1){S.lv[loc]=Math.max(1,S.lv[loc]-dmg);toast(`💥 Удар по локации «${L.n}»! −${dmg} ур.`)}else toast(`💥 Удар по локации «${L.n}»!`)}
+function applyState(r,d){if(!d)return;r.st=d;r.I.apply(d);r.tx=d.x||0;r.tz=d.z||0}
 function addRemote(p){if(remotes.has(p.id))return;const I=makeIsland();place(I,p.slot);setName(I,p.name||'Игрок');
- const av=mkHuman(new THREE.Color().setHSL(p.c||0,.7,.5));I.g.add(av.g);const r={I,av,tx:0,tz:0,name:p.name||'Игрок'};remotes.set(p.id,r);applyState(r,p.d)}
+ const av=mkHuman(new THREE.Color().setHSL(p.c||0,.7,.5));I.g.add(av.g);const r={I,av,tx:0,tz:0,name:p.name||'Игрок',st:null};remotes.set(p.id,r);applyState(r,p.d)}
 function dropRemote(id){const r=remotes.get(id);if(r){scene.remove(r.I.g);remotes.delete(id)}}
 function connect(){
  ws=new WebSocket((location.protocol=='https:'?'wss://':'ws://')+location.host);
@@ -193,42 +211,39 @@ function connect(){
   else if(m.t=='full')toast('Сервер полон (макс. 16 игроков)');
   online=remotes.size+1;$('on').textContent=online}}
 connect();
-setInterval(()=>{if(!ws||ws.readyState!==1||myId===null)return;const st={h:S.house,e:S.expanded?1:0,s:S.stable,r:S.rockets.map(r=>r.lvl),x:+hum.position.x.toFixed(1),z:+hum.position.z.toFixed(1)};const j=JSON.stringify(st);if(j!==lastP){lastP=j;ws.send(JSON.stringify({t:'state',d:st}))}},120);
+setInterval(()=>{if(!ws||ws.readyState!==1||myId===null)return;const st={lv:{...S.lv},pvo:{...S.pvo},r:S.rockets.map(r=>r.lvl),x:+hum.position.x.toFixed(1),z:+hum.position.z.toFixed(1)};const j=JSON.stringify(st);if(j!==lastP){lastP=j;ws.send(JSON.stringify({t:'state',d:st}))}},120);
 
 // ---- цикл ----
 function resize(){renderer.setSize(innerWidth,innerHeight);cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix()}
 addEventListener('resize',resize);resize();
-let prev=performance.now(),acc=0;const wp=new THREE.Vector3(),camT=new THREE.Vector3();
+let prev=performance.now(),acc=0;const camT=new THREE.Vector3();
 function loop(now){requestAnimationFrame(loop);const dt=Math.min(.05,(now-prev)/1000);prev=now;
  S.money+=income()*dt;$('m').textContent=fmt(S.money);$('inc').textContent=fmt(income());
- myI.apply({h:S.house,e:S.expanded,s:S.stable,r:S.rockets.map(r=>r.lvl)});
- const all=[myI,...[...remotes.values()].map(r=>r.I)];all.forEach(I=>{if(I.farm.visible)I.horse.position.x=4.5+Math.sin(now/1500)*1.2});
+ myI.apply({lv:S.lv,pvo:S.pvo,r:S.rockets.map(r=>r.lvl)});
+ [myI,...[...remotes.values()].map(r=>r.I)].forEach(I=>{if(I.Z.f.visible)I.horse.position.x=4.5+Math.sin(now/1500)*1.2});
  coinG.rotation.y+=dt*1.5;bigCoin.position.y=8+Math.sin(now/600)*.5;
- // я
  let mx=0,mz=0;if(keys.KeyW||keys.ArrowUp)mz-=1;if(keys.KeyS||keys.ArrowDown)mz+=1;if(keys.KeyA||keys.ArrowLeft)mx-=1;if(keys.KeyD||keys.ArrowRight)mx+=1;
  let moving=false;const ph=myI.g.rotation.y,c=Math.cos(ph),s=Math.sin(ph);
  if(mx||mz){target=null;const l=Math.hypot(mx,mz);mx/=l;mz/=l;
   const wx=mx*Math.cos(ang)+mz*Math.sin(ang),wz=-mx*Math.sin(ang)+mz*Math.cos(ang);
-  const dx=wx*c-wz*s,dz=wx*s+wz*c;const nx=hum.position.x+dx*6*dt,nz=hum.position.z+dz*6*dt;
+  const dx=wx*c-wz*s,dz=wx*s+wz*c;const nx=hum.position.x+dx*7*dt,nz=hum.position.z+dz*7*dt;
   if(walkable(nx,nz)){hum.position.x=nx;hum.position.z=nz;moving=true}hum.rotation.y=Math.atan2(dx,dz)}
  else if(target){const dx=target.x-hum.position.x,dz=target.z-hum.position.z,d=Math.hypot(dx,dz);
-  if(d<.2)target=null;else{hum.position.x+=dx/d*6*dt;hum.position.z+=dz/d*6*dt;hum.rotation.y=Math.atan2(dx,dz);moving=true}}
+  if(d<.2)target=null;else{hum.position.x+=dx/d*7*dt;hum.position.z+=dz/d*7*dt;hum.rotation.y=Math.atan2(dx,dz);moving=true}}
  if(moving)wt+=dt*10;swing(me,moving?Math.sin(wt)*.7:0);
- // другие игроки
  remotes.forEach(r=>{const a=r.av.g,dx=r.tx-a.position.x,dz=r.tz-a.position.z,d=Math.hypot(dx,dz);
-  if(d>.05){const st=Math.min(d,6*dt);a.position.x+=dx/d*st;a.position.z+=dz/d*st;a.rotation.y=Math.atan2(dx,dz);r.wt=(r.wt||0)+dt*10;swing(r.av,Math.sin(r.wt)*.7)}else swing(r.av,0)});
- // ракеты
+  if(d>.05){const st=Math.min(d,7*dt);a.position.x+=dx/d*st;a.position.z+=dz/d*st;a.rotation.y=Math.atan2(dx,dz);r.wt=(r.wt||0)+dt*10;swing(r.av,Math.sin(r.wt)*.7)}else swing(r.av,0)});
  S.rockets.forEach(r=>{
   if(r.state=='fly'){r.v+=dt*28;r.g.position.y+=r.v*dt;r.fl.scale.y=.8+Math.random()*.6;if(r.g.position.y>90){r.state='wait';r.t=5;r.g.visible=false;r.fl.visible=false;ui()}}
   else if(r.state=='wait'){r.t-=dt;if(r.t<=0){r.state='idle';r.g.position.y=.25;r.g.visible=true;ui()}}});
- // ракеты по игрокам и взрывы
- for(let i=missiles.length-1;i>=0;i--){const m=missiles[i];m.t+=dt/3;const t=Math.min(1,m.t),t2=Math.min(1,t+.02);
-  m.g.position.lerpVectors(m.a,m.b,t);m.g.position.y+=Math.sin(t*Math.PI)*45;
-  const n=new THREE.Vector3().lerpVectors(m.a,m.b,t2);n.y+=Math.sin(t2*Math.PI)*45;m.g.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),n.sub(m.g.position).normalize());
-  if(m.t>=1){scene.remove(m.g);missiles.splice(i,1);boom(m.b);if(m.hit)hitMe(m.l);else if(m.mine)toast('💥 Попадание'+(m.name?': '+m.name:'')+'!')}}
+ for(let i=missiles.length-1;i>=0;i--){const m=missiles[i];m.t+=dt/3.5;const t=Math.min(1,m.t),t2=Math.min(1,t+.02);
+  m.g.position.lerpVectors(m.a,m.b,t);m.g.position.y+=Math.sin(t*Math.PI)*60;
+  const n=new THREE.Vector3().lerpVectors(m.a,m.b,t2);n.y+=Math.sin(t2*Math.PI)*60;m.g.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),n.sub(m.g.position).normalize());
+  if(m.t>=(m.ic?.8:1)){scene.remove(m.g);missiles.splice(i,1);const L=LOC[m.loc];
+   if(m.ic){boom(m.g.position.clone(),0x4fc3f7);if(m.hit)toast('🛡 ПВО сбила ракету: '+L.n);else if(m.mine)toast('🛡 Твою ракету сбила ПВО')}
+   else{boom(m.b);if(m.hit)hitMe(m.l,m.loc);else if(m.mine)toast('💥 Попадание: '+(m.name?m.name+', ':'')+L.n+'!')}}}
  for(let i=booms.length-1;i>=0;i--){const b=booms[i];b.t+=dt*1.2;b.m.scale.setScalar(1+b.t*10);b.m.material.opacity=Math.max(0,1-b.t);if(b.t>=1){scene.remove(b.m);booms.splice(i,1)}}
- // камера
- const D=ov?150:dist,P=ov?Math.max(pitch,.7):pitch;
+ const D=ov?330:dist,P=ov?Math.max(pitch,.8):pitch;
  if(ov)camT.set(0,0,0);else hum.getWorldPosition(camT);
  cam.position.set(camT.x+Math.sin(ang)*Math.cos(P)*D,Math.sin(P)*D,camT.z+Math.cos(ang)*Math.cos(P)*D);cam.lookAt(camT.x,1,camT.z);
  sea.position.x=camT.x;sea.position.z=camT.z;
