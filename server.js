@@ -23,7 +23,7 @@ const bc = (o, except) => {
   const s = JSON.stringify(o);
   players.forEach(p => { if (p.ws !== except && p.ws.readyState === 1) p.ws.send(s); });
 };
-const pub = p => ({ id: p.id, slot: p.slot, name: p.name, c: p.c, d: p.d });
+const pub = p => ({ id: p.id, slot: p.slot, name: p.name, c: p.c, d: p.d, sh: Math.max(0, (p.shieldUntil || 0) - Date.now()) });
 
 wss.on('connection', ws => {
   const used = new Set([...players.values()].map(p => p.slot));
@@ -53,15 +53,21 @@ wss.on('connection', ws => {
       p.d = {
         lv: objc(d.lv, 0, 30), pvo: objc(d.pvo, 0, 500),
         r: Array.isArray(d.r) ? d.r.slice(0, 4).map(x => clamp(x, 1, 500)) : [],
-        x: clamp(d.x, -40, 40), z: clamp(d.z, -50, 40)
+        br: d.br ? 1 : 0,
+        x: clamp(d.x, -40, 40), z: clamp(d.z, -40, 260)
       };
       bc({ t: 'state', id, d: p.d }, ws);
+    } else if (m.t === 'shield' && p.ready) {
+      if (!p.d || !p.d.br) { send(ws, { t: 'deny', msg: 'Сначала построй мост' }); return; }
+      p.shieldUntil = now + 300000; // щит на 5 минут
+      bc({ t: 'shield', id, ms: 300000 });
     } else if (m.t === 'strike' && p.ready) {
       const target = players.get(m.to), loc = String(m.loc);
       if (!target || target === p || !target.ready || !target.d || !K.includes(loc)) return;
       if (!(target.d.lv[loc] > 0)) return;
       if (now - p.lastStrike < 1000) { send(ws, { t: 'deny', msg: 'Ракеты ещё перезаряжаются' }); return; }
       p.lastStrike = now;
+      if (now < (target.shieldUntil || 0)) { bc({ t: 'strike', from: id, to: m.to, loc, l: clamp(m.l, 1, 500), ic: true, sh: true }); return; }
       const maxLvl = Math.max(1, ...((p.d && p.d.r) || [1]));
       const l = Math.min(clamp(m.l, 1, 500), maxLvl);
       // ПВО цели: 4 заряда, +1 заряд за 8 секунд
