@@ -379,13 +379,10 @@ function musUI(){let h='';const mm=S.mus,act=x=>x?' style="background:var(--ac);
   if(newsLog.length>1)h+='<div class="info">Ранее:<br>'+newsLog.slice(1).map(esc).join('<br>')+'</div>';
   if(!('speechSynthesis' in window))h+='<div class="info">⚠️ Браузер не умеет озвучивать текст, новости будут только текстом.</div>'}
  else if(mm=='ily'){
-  h+='<div class="info">🎤 Официальные клипы Илюши (канал «Союз Мьюзик»). Выбери трек и нажми ▶ в окошке видео слева сверху.</div>';
-  ILY_EMB.forEach((t,i)=>{h+=`<button class="b" data-a="embPlay" data-i="${i}">${MU.src=='emb'&&MU.emb==i?'🔊 ':'▶ '}${esc(t.name)}</button>`});
-  if(MU.src=='emb'){const t=ILY_EMB[MU.emb];h+=`<div class="row wrap"><button class="b sm" data-a="embSrc">🔁 Сейчас: ${MU.esrc=='yt'?'YouTube':'Rutube'}${t.yt?'':' (YouTube нет)'}</button><button class="b sm" data-a="embOpen">↗ Открыть</button><button class="b sm" data-a="stopMus">⏹ Стоп</button></div>`}
-  if(MU.tracks.length){h+=`<div class="info">💿 Твои файлы (папка music) · треков: ${MU.tracks.length}${MU.src=='ily'&&MU.tracks[MU.idx]?' · играет: '+esc(MU.tracks[MU.idx].name):''}</div>`;
+  if(MU.tracks.length){h+=`<div class="info">🎤 Илюша · треков: ${MU.tracks.length}${MU.src=='ily'&&MU.tracks[MU.idx]?' · играет: '+esc(MU.tracks[MU.idx].name):''}</div>`;
    h+=`<div class="row wrap"><button class="b sm" data-a="musPrev">⏮</button><button class="b sm" data-a="musPause">${MU.src=='ily'&&!au.paused?'⏸':'▶'}</button><button class="b sm" data-a="musNext">⏭</button></div>`;
    MU.tracks.forEach((t,i)=>{h+=`<button class="b" data-a="musTrack" data-i="${i}">${MU.src=='ily'&&MU.idx==i?'🔊 ':'▶ '}${esc(t.name)}</button>`})}
-  else h+='<div class="info">Хочешь другие песни? Положи mp3 в папку <b>music</b> репозитория на GitHub, и они появятся здесь.</div>'}
+  else h+='<div class="info">🎤 Песен пока нет. Загрузи mp3-файлы в папку <b>music</b> репозитория на GitHub, и они появятся здесь.</div>'}
  else{
   h+=`<button class="b" data-a="musRadio">${MU.src=='radio'?'⏹ Остановить':'▶ Включить «Радио Дача»'}</button>`;
   if(MU.src=='radio')h+=`<div class="info">${esc(MU.status)}</div>`;
