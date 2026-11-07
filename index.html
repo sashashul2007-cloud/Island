@@ -34,17 +34,19 @@ const $=id=>document.getElementById(id);
 const fmt=n=>{if(n<1e3)return Math.floor(n)+'';const u=['K','M','B','T','Q'];let i=-1;while(n>=1e3&&i<4){n/=1e3;i++}return n.toFixed(n<10?2:1)+u[i]};
 // ---- локации ----
 const K=['h','f','s','c','n'];
-const LOC={h:{n:'Город',ico:'🏠',inc:5,up:13,buy:10,g:1.26},f:{n:'Ферма',ico:'🐴',inc:1000,up:4300,buy:50000,g:1.28},
- s:{n:'Солнечные панели',ico:'☀️',inc:25000,up:8.5e5,buy:2e6,g:1.28},c:{n:'Угольные печи',ico:'🏭',inc:4e5,up:1.7e7,buy:1e8,g:1.28},n:{n:'Атомные заводы',ico:'☢️',inc:6e6,up:2.5e8,buy:3e9,g:1.28}};
+const LOC={h:{n:'Город',ico:'🏠',inc:15,up:13,buy:10,g:1.35},f:{n:'Ферма',ico:'🐴',inc:2500,up:6250,buy:1.3e5,g:1.33},
+ s:{n:'Солнечные панели',ico:'☀️',inc:6e4,up:1.5e5,buy:2.2e7,g:1.37},c:{n:'Угольные печи',ico:'🏭',inc:1e6,up:2.5e6,buy:5.2e8,g:1.39},n:{n:'Атомные заводы',ico:'☢️',inc:1.6e7,up:4e7,buy:8.6e9,g:1.40}};
 const PREV={h:null,f:'h',s:'f',c:'s',n:'c'};
 const ZP={h:[-16,4],f:[-14,-16],s:[6,-20],c:[20,-6],n:[-6,20]},PP={h:[-16,11],f:[-7,-12],s:[6,-12],c:[15,-13],n:[3,14]};
 const ZR={h:9,f:7.5,s:8,c:7,n:8},ZC={h:0x7fb069,f:0x9a7b4f,s:0x8d9299,c:0x555a60,n:0xb9bec4};
 const S={bridge:false,shieldEnd:0,money:10,lv:{h:0,f:0,s:0,c:0,n:0},pvo:{h:0,f:0,s:0,c:0,n:0},rockets:[],tab:'l'};
 const locInc=(k,l)=>l>0?LOC[k].inc*INCM*Math.pow(1.15,l-1):0;
 const upCost=(k,l)=>Math.round(LOC[k].up*Math.pow(LOC[k].g,l-1));
-const pvoUp=l=>Math.round(250*Math.pow(1.025,l)),rockUp=l=>Math.round(80*Math.pow(1.026,l)),rockBuy=n=>[500,5000,50000,500000][n];
+const PM={h:1,f:4,s:16,c:64,n:256};
+const pvoUp=(k,l)=>Math.round(PM[k]*Math.pow(2+l/10,4)),rockUp=l=>Math.round(60*Math.pow(2+l/10,4)),rockBuy=n=>[1000,1e4,1e5,1e6][n];
+const launchBonus=l=>Math.max(5*l,Math.round(income()*(.2+l*.0016)));
 const NS=16,RING=215,HUE=Math.random();
-const INCM=3,BR_FROM=30,BR_TO=RING-18,BRIDGE_COST=1e11,SHIELD_COST=5e10,SHIELD_MS=300000;
+const INCM=1,BR_FROM=30,BR_TO=RING-18,BRIDGE_COST=3e11,SHIELD_COST=1e11,SHIELD_MS=300000;
 const income=()=>K.reduce((a,k)=>a+locInc(k,S.lv[k]),0);
 
 const renderer=new THREE.WebGLRenderer({antialias:true});
@@ -203,11 +205,11 @@ const A={
  loc(k){const L=LOC[k],lv=S.lv[k];
   if(lv==0){if(PREV[k]&&S.lv[PREV[k]]<30)return;if(S.money>=L.buy){S.money-=L.buy;S.lv[k]=1;if(k!='h')toast('Открыта локация: '+L.n)}}
   else if(lv<30){const c=upCost(k,lv);if(S.money>=c){S.money-=c;S.lv[k]++}}},
- pvo(k){const v=S.pvo[k];if(S.lv[k]<1||v>=500)return;const c=pvoUp(v);if(S.money>=c){S.money-=c;S.pvo[k]++}},
+ pvo(k){const v=S.pvo[k];if(S.lv[k]<1||v>=500)return;const c=pvoUp(k,v);if(S.money>=c){S.money-=c;S.pvo[k]++}},
  buyRocket(){const n=myI.rockets.length;if(n<4&&S.money>=rockBuy(n)){S.money-=rockBuy(n);myI.addRocket(n)}},
  upRocket(i){const r=S.rockets[i],c=rockUp(r.lvl);if(r.lvl<500&&S.money>=c){S.money-=c;r.lvl++;skin(r)}},
- launch(i){const r=S.rockets[i];if(r.state=='idle'){r.state='fly';r.v=2;r.fl.visible=true;S.money+=r.lvl*100}},
- attack(v){const [to,loc]=v.slice(1).split(':'),r=S.rockets.find(r=>r.state=='idle');if(!r||!ws||ws.readyState!==1)return;r.state='fly';r.v=2;r.fl.visible=true;S.money+=r.lvl*100;ws.send(JSON.stringify({t:'strike',to,loc,l:r.lvl}))},
+ launch(i){const r=S.rockets[i];if(r.state=='idle'){r.state='fly';r.v=2;r.fl.visible=true;S.money+=launchBonus(r.lvl)}},
+ attack(v){const [to,loc]=v.slice(1).split(':'),r=S.rockets.find(r=>r.state=='idle');if(!r||!ws||ws.readyState!==1)return;r.state='fly';r.v=2;r.fl.visible=true;S.money+=launchBonus(r.lvl);ws.send(JSON.stringify({t:'strike',to,loc,l:r.lvl}))},
  copy(){const done=()=>toast('Ссылка скопирована');try{navigator.clipboard.writeText(LINK).then(done,()=>toast('Выдели ссылку и скопируй вручную'))}catch(e){toast('Выдели ссылку и скопируй вручную')}},
  reset(){if(confirm('Сбросить весь прогресс? Это нельзя отменить.')){resetting=true;try{localStorage.removeItem(SAVE)}catch(e){}location.reload()}},
  bridge(){if(S.bridge||!K.every(k=>S.lv[k]>=30)||S.money<BRIDGE_COST)return;S.money-=BRIDGE_COST;S.bridge=true;toast('🌉 Мост построен! Иди по нему к центру острова сокровищ')},
@@ -227,8 +229,8 @@ function ui(){
    else if(lv<30)h+=btn('loc',`⬆ ${L.ico} ${L.n} ур. ${lv}/30 · +$${fmt(locInc(k,lv))}/с`,upCost(k,lv),k);
    else h+=`<div class="info">✔ ${L.ico} ${L.n}: макс. ур. 30 · +$${fmt(locInc(k,30))}/с</div>`})
  }else if(S.tab=='r'){
-  h+=`<div class="info">Ракеты: ${S.rockets.length}/4 · за запуск бонус $100 × уровень</div>`;
-  S.rockets.forEach((r,i)=>{h+=`<div class="row">${r.lvl<500?btn('upRocket',`🚀 №${i+1} ур. ${r.lvl}/500`,rockUp(r.lvl),i):`<button class="b" disabled>🚀 №${i+1} МАКС</button>`}<button class="b sm" data-a="launch" data-i="${i}" ${r.state=='idle'?'':'disabled'}>${r.state=='idle'?'Запуск':'Полёт…'}</button></div>`});
+  h+=`<div class="info">Ракеты: ${S.rockets.length}/4 · бонус за запуск зависит от уровня ракеты и твоего дохода</div>`;
+  S.rockets.forEach((r,i)=>{h+=`<div class="row">${r.lvl<500?btn('upRocket',`🚀 №${i+1} ур. ${r.lvl}/500`,rockUp(r.lvl),i):`<button class="b" disabled>🚀 №${i+1} МАКС</button>`}<button class="b sm" data-a="launch" data-i="${i}" ${r.state=='idle'?'':'disabled'}>${r.state=='idle'?'Запуск +$'+fmt(launchBonus(r.lvl)):'Полёт…'}</button></div>`});
   if(S.rockets.length<4)h+=btn('buyRocket','➕ Купить ракету (ур. 1)',rockBuy(S.rockets.length));
   h+='<div class="info">Цели: выбери локацию игрока (🛡 — уровень его ПВО). Попадание снижает уровень локации.</div>';
   if(!remotes.size)h+='<div class="info">Других игроков пока нет.</div>';
@@ -245,7 +247,7 @@ function ui(){
    h+=nearGen?btn('shield','⚡ Активировать щит',SHIELD_COST):'<div class="info">📍 Подойди к установке щита в центре острова сокровищ.</div>'}
  }else if(S.tab=='p'){
   h+='<div class="info">Одна ПВО на локацию: сбивает до 4 ракет подряд, потом перезаряжается (1 ракета за 8 с). Чем выше уровень ПВО относительно ракеты, тем больше шанс.</div>';
-  K.filter(k=>S.lv[k]>0).forEach(k=>{const v=S.pvo[k],L=LOC[k];h+=v>=500?`<div class="info">🛡 ${L.ico} ${L.n}: ПВО макс. 500</div>`:btn('pvo',`🛡 ${L.ico} ${L.n}: ПВО ур. ${v}/500${v?'':' (построить)'}`,pvoUp(v),k)})
+  K.filter(k=>S.lv[k]>0).forEach(k=>{const v=S.pvo[k],L=LOC[k];h+=v>=500?`<div class="info">🛡 ${L.ico} ${L.n}: ПВО макс. 500</div>`:btn('pvo',`🛡 ${L.ico} ${L.n}: ПВО ур. ${v}/500${v?'':' (построить)'}`,pvoUp(k,v),k)})
  }else{
   h+=`<div class="info">Сервер: ${conn?'🟢 подключён':'🔴 нет подключения'} · игроков онлайн: ${online}</div>`;
   h+=`<div class="info">Ссылка на сервер:</div><div class="lnk">${esc(LINK)}</div><button class="b" data-a="copy">📋 Скопировать ссылку</button><button class="b" data-a="reset">🗑 Сбросить прогресс</button>`;
