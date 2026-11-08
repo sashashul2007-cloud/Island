@@ -59,8 +59,8 @@ const upCost=(k,l)=>Math.round(LOC[k].up*Math.pow(LOC[k].g,l-1));
 const PM={h:1,f:4,s:16,c:64,n:256};
 const pvoUp=(k,l)=>Math.round(PM[k]*Math.pow(2+l/10,4)),rockUp=l=>Math.round(60*Math.pow(2+l/10,4)),rockBuy=n=>[1000,1e4,1e5,1e6][n];
 const launchBonus=l=>Math.max(5*l,Math.round(income()*(.2+l*.0016)));
-const NS=16,RING=215,HUE=Math.random();
-const BOAT_COST=5e6,BOAT_SPEED=16,TURRET_COST=2e7,SHOT_V=110,SHOT_G=-25,TUR_POS=[27.5,3.5];
+const NS=16,RING=290,HUE=Math.random();
+const BOAT_COST=5e6,BOAT_SPEED=22,TURRET_COST=2e7,SHOT_V=110,SHOT_G=-25,TUR_POS=[11,24],TUR_H=9;
 const INCM=1,BR_FROM=30,BR_TO=RING-18,BRIDGE_COST=3e11,SHIELD_COST=1e11,SHIELD_MS=300000;
 const allyBonus=()=>myAl?Math.min(.1,.02*[...remotes.values()].filter(r=>r.al===myAl).length):0;
 const income=()=>K.reduce((a,k)=>a+locInc(k,S.lv[k]),0)*(1+allyBonus());
@@ -129,7 +129,7 @@ function mkPvo(){const t=new THREE.Group();t.add(mesh(cyl(1.3,1.5,.5,14),0x6b707
 function makeIsland(){
  const g=new THREE.Group();scene.add(g);const I={g,houses:[],rockets:[],panels:[],furn:[],towers:[],stables:[],smoke:[],pvo:{},slot:null};
  g.add(isle(31));g.add(mesh(bx(14,.2,14),0x888c94,18,.15,12));[[11.3,5.3],[24.7,5.3],[11.3,18.7],[24.7,18.7]].forEach(p=>g.add(mesh(bx(.9,.22,.9),0xffd600,p[0],.16,p[1])));
- [[28,22,1.1],[28,-18,1],[-28,-28,1.2],[26,-26,1],[-28,14,1],[-28,24,1.1],[8,27,1],[28,-5,.9],[-3,-27,1]].forEach(p=>{const t=mkTree(p[2]);t.position.set(p[0],0,p[1]);g.add(t)});
+ [[28,22,1.1],[28,-18,1],[-28,-28,1.2],[26,-26,1],[-28,14,1],[-28,24,1.1],[28,-5,.9],[-3,-27,1]].forEach(p=>{const t=mkTree(p[2]);t.position.set(p[0],0,p[1]);g.add(t)});
  const Z={};K.forEach(k=>{const z=new THREE.Group();z.position.set(ZP[k][0],0,ZP[k][1]);z.visible=false;z.add(mesh(bx(2*ZR[k]+.8,.1,2*ZR[k]+.8),0x8e9a86,0,.06,0));z.add(mesh(bx(2*ZR[k],.12,2*ZR[k]),ZC[k],0,.1,0));g.add(z);Z[k]=z});I.Z=Z;
  Z.h.add(mesh(bx(15,.05,1.4),0x616161,0,.16,0));for(let i=-3;i<=3;i++)Z.h.add(mesh(bx(1,.06,.12),0xffffff,i*2,.17,0));
  [[-8,-8],[8,-8],[-8,8],[8,8]].forEach(p=>{const t=mkTree(.7);t.position.set(p[0],0,p[1]);Z.h.add(t)});
@@ -145,9 +145,14 @@ function makeIsland(){
  for(let i=0;i<3;i++){const t=mkTower(I.smoke);t.visible=false;t.position.set((i-1)*5.5,0,-2);Z.n.add(t);I.towers.push(t)}
  K.forEach(k=>{const t=mkPvo();t.position.set(PP[k][0],0,PP[k][1]);t.visible=false;g.add(t);I.pvo[k]=t});
  const tur=new THREE.Group();tur.position.set(TUR_POS[0],0,TUR_POS[1]);tur.visible=false;g.add(tur);I.tur=tur;
- tur.add(mesh(new THREE.CylinderGeometry(1.7,1.9,.6,16),0x6b7077,0,.3,0));
- for(let i=0;i<10;i++){const a=i/10*6.28;tur.add(mesh(bx(.9,.5,.5),0xc2a878,Math.cos(a)*2.4,.25,Math.sin(a)*2.4).rotateY(-a))}
- const head=new THREE.Group();head.position.y=.6;tur.add(head);I.turHead=head;
+ const TH=TUR_H;tur.add(mesh(bx(5.4,.5,5.4),0x8d9399,0,.25,0));
+ [[-1.7,-1.7],[1.7,-1.7],[-1.7,1.7],[1.7,1.7]].forEach(p=>tur.add(mesh(bx(.5,TH,.5),0x6b7077,p[0],TH/2,p[1])));
+ [.33,.66].forEach(f=>{const y=TH*f;[-1.7,1.7].forEach(v=>{tur.add(mesh(bx(3.9,.2,.2),0x59606a,0,y,v));tur.add(mesh(bx(.2,.2,3.9),0x59606a,v,y,0))})});
+ tur.add(mesh(bx(.1,TH,.1),0x9e9e9e,-.4,TH/2,-2.1));tur.add(mesh(bx(.1,TH,.1),0x9e9e9e,.4,TH/2,-2.1));for(let y=.6;y<TH;y+=.6)tur.add(mesh(bx(.9,.08,.08),0xbdbdbd,0,y,-2.1));
+ tur.add(mesh(bx(4.6,.4,4.6),0x4b5d3a,0,TH,0));
+ [[-2.2,-2.2],[2.2,-2.2],[-2.2,2.2],[2.2,2.2]].forEach(p=>tur.add(mesh(bx(.12,1.1,.12),0x37474f,p[0],TH+.75,p[1])));
+ [-2.2,2.2].forEach(v=>{tur.add(mesh(bx(4.5,.12,.12),0x37474f,0,TH+1.25,v));tur.add(mesh(bx(.12,.12,4.5),0x37474f,v,TH+1.25,0))});
+ const head=new THREE.Group();head.position.y=TH+.2;tur.add(head);I.turHead=head;
  head.add(mesh(bx(2.2,.4,2.4),0x4b5d3a,0,.2,0));head.add(mesh(bx(2,1.3,.18),0x556b2f,0,1,1.05));head.add(mesh(bx(.8,.6,.7),0x3e2723,0,.7,-.7));head.add(mesh(bx(.7,.5,.6),0x6d4c41,1.4,.45,-.2));
  const bar=new THREE.Group();bar.position.set(0,1.3,.4);head.add(bar);I.turBar=bar;
  [-.38,.38].forEach(x=>{const b=mesh(new THREE.CylinderGeometry(.16,.18,3.4,10),0x37474f,x,0,1.7);b.rotation.x=Math.PI/2;bar.add(b);bar.add(mesh(bx(.34,.3,.4),0x263238,x,0,3.45))});
@@ -236,7 +241,7 @@ cvs.addEventListener('pointerdown',e=>{try{cvs.setPointerCapture(e.pointerId)}ca
  ptr.set(e.pointerId,{x:e.clientX,y:e.clientY,x0:e.clientX,y0:e.clientY,mode})});
 cvs.addEventListener('pointermove',e=>{const p=ptr.get(e.pointerId);if(!p)return;const dx=e.clientX-p.x,dy=e.clientY-p.y;
  if(p.mode=='joy'){const jx=e.clientX-p.x0,jy=e.clientY-p.y0,l=Math.hypot(jx,jy);if(l<10){joy.x=0;joy.y=0}else{joy.x=jx/l;joy.y=jy/l}}
- else if(p.mode=='aim'){tRel-=dx*.005;tPit=Math.min(1.2,Math.max(.02,tPit-dy*.004));p.x=e.clientX;p.y=e.clientY}
+ else if(p.mode=='aim'){tRel-=dx*.005;tPit=Math.min(1.5,Math.max(-1.5,tPit-dy*.004));p.x=e.clientX;p.y=e.clientY}
  else{ang-=dx*.008;pitch=Math.min(1.45,Math.max(.12,pitch+dy*.006));p.x=e.clientX;p.y=e.clientY}});
 const pend=e=>{const p=ptr.get(e.pointerId);if(p&&p.mode=='joy'){joy.x=0;joy.y=0}ptr.delete(e.pointerId)};
 cvs.addEventListener('pointerup',pend);cvs.addEventListener('pointercancel',pend);
@@ -266,7 +271,7 @@ const A={
  land(){const n=nearestLand();if(!sailing||!n){toast('Рядом нет острова');return}const q=v=>Math.max(-27.5,Math.min(27.5,v));
   n.I.g.add(hum);hum.position.set(q(n.l.x),0,q(n.l.z));hum.rotation.set(0,0,0);sailing=false;cur=n.I;target=null;toast(n.I===myI?'🏠 Ты дома':'🏴‍☠️ Ты в гостях на чужом острове')},
  dock(){if(sailing)return;boat.moved=false;dockBoat();toast('⚓ Лодка вернулась к причалу')},
- buyTurret(){if(S.turret||S.money<TURRET_COST)return;S.money-=TURRET_COST;S.turret=true;toast('🎯 Турель установлена на краю острова у причала')},
+ buyTurret(){if(S.turret||S.money<TURRET_COST)return;S.money-=TURRET_COST;S.turret=true;toast('🎯 Турель установлена на башне со стороны центра')},
  turretOn(){if(!S.turret||!nearTurret||sailing||cur!==myI)return;turretMode=true;target=null;document.body.classList.add('tm')},
  aCreate(){const n=(prompt('Название альянса (2–14 символов):','')||'').trim();if(n.length<2||!ws||ws.readyState!==1)return;ws.send(JSON.stringify({t:'a_create',name:n}))},
  aInvite(v){if(ws&&ws.readyState===1)ws.send(JSON.stringify({t:'a_invite',to:v.slice(1)}))},
@@ -319,9 +324,9 @@ function ui(){
    remotes.forEach((r,id)=>{if(!r.al)h+=`<button class="b" data-a="aInvite" data-i="x${id}">✉ Пригласить: ${esc(r.name)}</button>`});
    h+='<button class="b" data-a="aLeave">🚪 Покинуть альянс</button><div class="info">Альянс живёт, пока в нём есть игроки онлайн (до 6 человек).</div>'}
  }else if(S.tab=='t'){
-  if(!S.turret)h+=btn('buyTurret','🎯 Купить турель',TURRET_COST)+'<div class="info">Турель стоит на краю твоего острова. Ты сам наводишь её и стреляешь по лодкам других игроков.</div>';
-  else{h+='<div class="info">🎯 Турель стоит у причала. Управление: тяни по экрану — наводка, 🔥 — выстрел (или пробел), стрелки/WASD — тоже наводка.</div>';
-   h+=nearTurret?'<button class="b" data-a="turretOn">🎯 Взять управление</button>':'<div class="info">📍 Подойди к турели (край острова справа у причала).</div>'}
+  if(!S.turret)h+=btn('buyTurret','🎯 Купить турель',TURRET_COST)+'<div class="info">Турель стоит на башне у края твоего острова, ближе к центральному острову. Ты сам наводишь её и стреляешь по лодкам других игроков.</div>';
+  else{h+='<div class="info">🎯 Турель стоит на башне со стороны центра. Наводка — в любую сторону, вверх и вниз. Управление: тяни по экрану — наводка, 🔥 — выстрел (или пробел), стрелки/WASD — тоже наводка.</div>';
+   h+=nearTurret?'<button class="b" data-a="turretOn">🎯 Взять управление</button>':'<div class="info">📍 Подойди к башне с турелью (край острова, ближе к центру).</div>'}
  }else if(S.tab=='b'){
   if(!S.boat)h+=btn('buyBoat','⛵ Купить лодку',BOAT_COST)+'<div class="info">На лодке можно плыть к островам других игроков и высаживаться в гости. Осторожно: чужие турели сбивают лодки.</div>';
   else if(sailing){const nl=!!nearestLand();h+='<div class="info">⛵ Ты в плавании: тап по воде или WASD. Подплыви к острову (👁 — обзор) и высадись.</div>';h+=`<button class="b" data-a="land" ${nl?'':'disabled'}>⚓ Высадиться${nl?'':' (рядом нет острова)'}</button>`}
@@ -484,7 +489,7 @@ function loop(now){requestAnimationFrame(loop);const dt=Math.min(.05,(now-prev)/
    else{boom(m.b);if(m.hit)hitMe(m.l,m.loc,m.fn);else if(m.mine)toast('💥 Попадание: '+(m.name?m.name+', ':'')+L.n+'!')}}}
  for(let i=booms.length-1;i>=0;i--){const b=booms[i];b.t+=dt*1.2;b.m.scale.setScalar(1+b.t*(b.sz||10));b.m.material.opacity=Math.max(0,1-b.t);if(b.t>=1){scene.remove(b.m);booms.splice(i,1)}}
  hum.getWorldPosition(tmpV);nearGen=Math.hypot(tmpV.x,tmpV.z+22.4)<16;
- if(turretMode){if(keys.KeyA||keys.ArrowLeft)tRel+=dt*1.2;if(keys.KeyD||keys.ArrowRight)tRel-=dt*1.2;if(keys.KeyW||keys.ArrowUp)tPit=Math.min(1.2,tPit+dt*.8);if(keys.KeyS||keys.ArrowDown)tPit=Math.max(.02,tPit-dt*.8);
+ if(turretMode){if(keys.KeyA||keys.ArrowLeft)tRel+=dt*1.2;if(keys.KeyD||keys.ArrowRight)tRel-=dt*1.2;if(keys.KeyW||keys.ArrowUp)tPit=Math.min(1.5,tPit+dt*.8);if(keys.KeyS||keys.ArrowDown)tPit=Math.max(-1.5,tPit-dt*.8);
   fireCd-=dt;if((firing||keys.Space)&&fireCd<=0&&ws&&ws.readyState===1){fireCd=.35;myI.turMuz.getWorldPosition(tmpW);const q=myI.turBar.getWorldQuaternion(new THREE.Quaternion()),d=new THREE.Vector3(0,0,1).applyQuaternion(q).multiplyScalar(SHOT_V);
    ws.send(JSON.stringify({t:'shot',o:[+tmpW.x.toFixed(2),+tmpW.y.toFixed(2),+tmpW.z.toFixed(2)],v:[+d.x.toFixed(2),+d.y.toFixed(2),+d.z.toFixed(2)]}))}}
  for(let i=shots.length-1;i>=0;i--){const sh=shots[i];sh.t+=dt;const p=sh.m.position;p.set(sh.o.x+sh.v.x*sh.t,sh.o.y+sh.v.y*sh.t+.5*SHOT_G*sh.t*sh.t,sh.o.z+sh.v.z*sh.t);
@@ -492,7 +497,7 @@ function loop(now){requestAnimationFrame(loop);const dt=Math.min(.05,(now-prev)/
   if(!end&&sailing&&sh.by!==myId&&!(myAl&&(remotes.get(sh.by)||{}).al===myAl)&&!sh.sent&&p.y<4&&Math.hypot(p.x-boat.x,p.z-boat.z)<3.6){sh.sent=true;end=true;if(ws&&ws.readyState===1)ws.send(JSON.stringify({t:'sink',by:sh.by}))}
   if(end){scene.remove(sh.m);shots.splice(i,1)}}
  nearTurret=!sailing&&cur===myI&&Math.hypot(hum.position.x-TUR_POS[0],hum.position.z-TUR_POS[1])<9;
- const D=ov?380:dist,P=ov?Math.max(pitch,.8):pitch;
+ const D=ov?560:dist,P=ov?Math.max(pitch,.8):pitch;
  if(ov)camT.set(0,0,0);else hum.getWorldPosition(camT);
  if(turretMode){myI.turHead.getWorldPosition(tmpW);const q=myI.turBar.getWorldQuaternion(new THREE.Quaternion()),d=new THREE.Vector3(0,0,1).applyQuaternion(q);cam.position.set(tmpW.x-d.x*7,tmpW.y+2.6-d.y*7,tmpW.z-d.z*7);cam.lookAt(tmpW.x+d.x*30,tmpW.y+2.6+d.y*30,tmpW.z+d.z*30)}
  else{cam.position.set(camT.x+Math.sin(ang)*Math.cos(P)*D,Math.sin(P)*D,camT.z+Math.cos(ang)*Math.cos(P)*D);cam.lookAt(camT.x,1,camT.z)}
