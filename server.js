@@ -6,7 +6,7 @@ const { WebSocketServer } = require('ws');
 
 const PORT = process.env.PORT || 3000;
 const MAX = 16;
-const RING = 215; // как в игре // максимум игроков (по числу мест на кольце)
+const RING = 290; // как в игре // максимум игроков (по числу мест на кольце)
 const html = fs.readFileSync(path.join(__dirname, 'index.html'));
 
 // ---------- музыка: свои файлы (папка music или рядом с index.html) ----------
@@ -155,7 +155,7 @@ wss.on('connection', ws => {
         lv: objc(d.lv, 0, 30), pvo: objc(d.pvo, 0, 500),
         r: Array.isArray(d.r) ? d.r.slice(0, 4).map(x => clamp(x, 1, 500)) : [],
         br: d.br ? 1 : 0,
-        tu: d.tu ? 1 : 0, ty: clamp(d.ty, -7, 7), tp: clamp(d.tp, 0, 1.3), wx: clamp(d.wx, -700, 700), wz: clamp(d.wz, -700, 700), sail: d.sail ? 1 : 0,
+        tu: d.tu ? 1 : 0, ty: clamp(d.ty, -7, 7), tp: clamp(d.tp, -1.6, 1.6), wx: clamp(d.wx, -700, 700), wz: clamp(d.wz, -700, 700), sail: d.sail ? 1 : 0,
         bo: d.bo ? 1 : 0, bx: clamp(d.bx, -700, 700), bz: clamp(d.bz, -700, 700), by: clamp(d.by, -7, 7)
       };
       bc({ t: 'state', id, d: p.d }, ws);
