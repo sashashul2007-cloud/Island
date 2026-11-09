@@ -35,13 +35,16 @@ canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
 #mpb button{border:0;background:none;color:var(--fg);font-size:14px}
 #mpf{width:100%;aspect-ratio:16/9;border:0;display:block;background:#000}
 .tm #mp,.tm #tk{display:none!important}
+#evp{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 146px);background:var(--card);padding:3px 10px;border-radius:10px;font-size:11px;font-weight:600;pointer-events:none;white-space:nowrap;max-width:94%;overflow:hidden;text-overflow:ellipsis;z-index:3}
+#chatbar{display:none;gap:6px;margin:0 0 6px}#chatbar input{flex:1;min-width:0;padding:9px;border-radius:10px;border:1px solid var(--off);background:var(--card);color:var(--fg);font-size:14px}#chatbar button{border:0;border-radius:10px;padding:0 14px;background:var(--btn);color:var(--fg);font-size:17px}
+.tm #evp{display:none!important}
 #hint{position:fixed;left:0;right:0;top:112px;text-align:center;font-size:12px;opacity:.75;pointer-events:none}
 </style></head><body>
-<div id="hud"><div class="pill"><small>Онлайн</small>👥 <span id="on">1</span></div><div class="pill"><small>Деньги</small>$<span id="m">10</span></div><div class="pill"><small>Доход</small>+$<span id="inc">0</span>/с</div></div><button id="ov">👁</button><div id="toast"></div><div id="alert"></div><div id="tk"></div>
+<div id="hud"><div class="pill"><small>Онлайн</small>👥 <span id="on">1</span></div><div class="pill"><small>Деньги</small>$<span id="m">10</span></div><div class="pill"><small>Доход</small>+$<span id="inc">0</span>/с</div></div><button id="ov">👁</button><div id="toast"></div><div id="alert"></div><div id="tk"></div><div id="evp"></div>
 <div id="mp"><div id="mpb"><span id="mpt"></span><button id="mpx">✖</button></div><iframe id="mpf" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe></div>
 <div id="hint">Левая половина экрана — движение (невидимый джойстик), правая — камера · 👁 — обзор</div>
 <div id="tur"><div id="xh"></div><button id="tex">✖ Выйти</button><button id="fire">🔥</button></div>
-<div id="panel"><div id="tabs"></div><div id="body"></div></div>
+<div id="panel"><div id="tabs"></div><div id="chatbar"><button id="cs">🌐</button><input id="ci" maxlength="120" placeholder="Сообщение…" autocomplete="off"><button id="csnd">➤</button></div><div id="body"></div></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 const $=id=>document.getElementById(id);
@@ -53,7 +56,7 @@ const LOC={h:{n:'Город',ico:'🏠',inc:15,up:13,buy:10,g:1.35},f:{n:'Фер
 const PREV={h:null,f:'h',s:'f',c:'s',n:'c'};
 const ZP={h:[-16,4],f:[-14,-16],s:[6,-20],c:[20,-6],n:[-6,20]},PP={h:[-16,11],f:[-7,-12],s:[6,-12],c:[15,-13],n:[3,14]};
 const ZR={h:9,f:7.5,s:8,c:7,n:8},ZC={h:0x7fb069,f:0x9a7b4f,s:0x8d9299,c:0x555a60,n:0xb9bec4};
-const S={set:'srv',mus:'news',turret:false,boat:false,bridge:false,shieldEnd:0,money:10,lv:{h:0,f:0,s:0,c:0,n:0},pvo:{h:0,f:0,s:0,c:0,n:0},rockets:[],tab:'l'};
+const S={set:'srv',mus:'news',pr:0,lost:{h:0,f:0,s:0,c:0,n:0},tun:{rate:0,vel:0,rad:0},stat:{sk:0,hit:0},turret:false,boat:false,bridge:false,shieldEnd:0,money:10,lv:{h:0,f:0,s:0,c:0,n:0},pvo:{h:0,f:0,s:0,c:0,n:0},rockets:[],tab:'l'};
 const locInc=(k,l)=>l>0?LOC[k].inc*INCM*Math.pow(1.15,l-1):0;
 const upCost=(k,l)=>Math.round(LOC[k].up*Math.pow(LOC[k].g,l-1));
 const PM={h:1,f:4,s:16,c:64,n:256};
@@ -61,16 +64,25 @@ const pvoUp=(k,l)=>Math.round(PM[k]*Math.pow(2+l/10,4)),rockUp=l=>Math.round(60*
 const launchBonus=l=>Math.max(5*l,Math.round(income()*(.2+l*.0016)));
 const NS=16,RING=290,HUE=Math.random();
 const BOAT_COST=5e6,BOAT_SPEED=22,TURRET_COST=2e7,SHOT_V=110,SHOT_G=-25,TUR_POS=[11,24],TUR_H=9;
+const DAY_MS=600000,ev={k:null,until:0};
+const shotV=()=>SHOT_V+6*S.tun.vel,fireGap=()=>Math.max(.1,.35-.025*S.tun.rate),tunCost=(k,l)=>Math.round(2e7*Math.pow(2.1,l));
+const dayPhase=()=>(Date.now()%DAY_MS)/DAY_MS;
+function dayLight(){return Math.min(1,Math.max(0,(Math.sin((dayPhase()-.25)*Math.PI*2)+.25)/1.25))}
+const evMul=()=>ev.k=='gold'&&Date.now()<ev.until?1.5:1,solarMul=()=>.55+.45*dayLight();
+const upCostFor=(k,l)=>Math.round(LOC[k].up*Math.pow(LOC[k].g,l-1));
+const repairCost=k=>{let c=0;for(let i=0;i<S.lost[k];i++)c+=upCostFor(k,S.lv[k]+i);return Math.round(c*.4)};
+let PID='';try{PID=localStorage.getItem('island_pid')||''}catch(e){}
+if(!PID){PID=Array.from(crypto.getRandomValues(new Uint8Array(12))).map(b=>b.toString(16).padStart(2,'0')).join('');try{localStorage.setItem('island_pid',PID)}catch(e){}}
 const INCM=1,BR_FROM=30,BR_TO=RING-18,BRIDGE_COST=3e11,SHIELD_COST=1e11,SHIELD_MS=300000;
 const allyBonus=()=>myAl?Math.min(.1,.02*[...remotes.values()].filter(r=>r.al===myAl).length):0;
-const income=()=>K.reduce((a,k)=>a+locInc(k,S.lv[k]),0)*(1+allyBonus());
+const income=()=>K.reduce((a,k)=>a+locInc(k,S.lv[k])*(k=='s'?solarMul():1),0)*(1+allyBonus())*(1+.3*S.pr)*evMul();
 
 const renderer=new THREE.WebGLRenderer({antialias:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 document.body.prepend(renderer.domElement);
 const scene=new THREE.Scene();scene.background=new THREE.Color(0x9ad4f5);scene.fog=new THREE.Fog(0x9ad4f5,250,1000);
 const cam=new THREE.PerspectiveCamera(55,1,.1,3000);
-scene.add(new THREE.HemisphereLight(0xffffff,0x6a8f5a,.9));
+const hemi=new THREE.HemisphereLight(0xffffff,0x6a8f5a,.9);scene.add(hemi);
 const sun=new THREE.DirectionalLight(0xffffff,.8);sun.position.set(20,30,10);scene.add(sun);
 const MC={};const M=c=>MC[c]||(MC[c]=new THREE.MeshLambertMaterial({color:c}));
 const mesh=(g,c,x=0,y=0,z=0)=>{const m=new THREE.Mesh(g,typeof c=='number'?M(c):c);m.position.set(x,y,z);return m};
@@ -99,7 +111,7 @@ function mkRocketMesh(){const rg=new THREE.Group();
 function mkTree(s=1){const t=new THREE.Group();t.add(mesh(cyl(.2,.28,1.4,6),0x6b4423,0,.7,0));t.add(mesh(new THREE.ConeGeometry(1.2,1.9,8),0x2e8b3a,0,2,0));t.add(mesh(new THREE.ConeGeometry(.9,1.5,8),0x3aa04a,0,3,0));t.scale.setScalar(s);return t}
 function mkHouse(i){const h=new THREE.Group(),wall=[0xf4e3c1,0xe9c6c6,0xc6d9e9,0xdbe9c6,0xf0d9a8][i%5],rc=[0xa8452f,0x6d4c41,0x37618f,0x7a3b3b,0x4e6b3a][i%5];
  h.add(mesh(bx(1.9,.15,1.9),0x9e9e9e,0,.07,0));h.add(mesh(bx(1.8,1.3,1.8),wall,0,.8,0));
- const r=mesh(new THREE.ConeGeometry(1.5,1,4),rc,0,1.95,0);r.rotation.y=Math.PI/4;h.add(r);h.add(mesh(bx(.25,.6,.25),0x8d6e63,.5,2.1,.3));
+ const r=mesh(new THREE.ConeGeometry(1.5,1,4),rc,0,1.95,0);r.rotation.y=Math.PI/4;h.add(r);h.roof=r;h.rc0=rc;h.add(mesh(bx(.25,.6,.25),0x8d6e63,.5,2.1,.3));
  h.add(mesh(bx(.42,.8,.06),0x5d3a1a,0,.55,.92));h.add(mesh(new THREE.SphereGeometry(.04,6,6),0xffd54f,.14,.55,.97));h.add(mesh(bx(.9,.07,.5),0xbcaaa4,0,.04,1.2));
  [-.58,.58].forEach(x=>{h.add(mesh(bx(.46,.46,.04),0xffffff,x,1,.91));h.add(mesh(bx(.36,.36,.06),0x81d4fa,x,1,.92))});
  [-.91,.91].forEach(x=>{h.add(mesh(bx(.04,.46,.46),0xffffff,x,1,0));h.add(mesh(bx(.06,.36,.36),0x81d4fa,x,1,0))});return h}
@@ -167,7 +179,7 @@ function makeIsland(){
   for(let z=BR_FROM+10;z<BR_TO;z+=20){br.add(mesh(bx(.9,3.4,.9),0x7a5a3a,-1.4,-1.5,z));br.add(mesh(bx(.9,3.4,.9),0x7a5a3a,1.4,-1.5,z))}}
  const dome=new THREE.Mesh(new THREE.SphereGeometry(46,28,14,0,Math.PI*2,0,Math.PI/2),new THREE.MeshBasicMaterial({color:0x66e0ff,transparent:true,opacity:.16,side:THREE.DoubleSide,depthWrite:false}));dome.visible=false;g.add(dome);I.dome=dome;I.shieldUntil=0;
  I.addRocket=i=>{const m=mkRocketMesh();m.g.position.set(slots[i][0],.25,slots[i][1]);g.add(m.g);const r={lvl:1,state:'idle',t:0,v:0,g:m.g,body:m.body,nose:m.nose,b2:m.b2,b4:m.b4,fl:m.fl};I.rockets.push(r);skin(r);return r};
- I.apply=st=>{const lv=st.lv||{},pv=st.pvo||{};I.bridge.visible=!!st.br;I.tur.visible=!!st.tu;if(st.tu)I.setAim(st.ty||0,st.tp||0);
+ I.apply=st=>{const lv=st.lv||{},pv=st.pvo||{};I.bridge.visible=!!st.br;{const pr=st.pr|0;if(I.prv!==pr){I.prv=pr;const pc=[0xa8452f,0x1e88e5,0x8e24aa,0xffc400,0x00bfa5][Math.min(pr,4)];I.houses.forEach(h=>{h.roof.material=M(pr?pc:h.rc0)})}}I.tur.visible=!!st.tu;if(st.tu)I.setAim(st.ty||0,st.tp||0);
   K.forEach(k=>{const on=(lv[k]|0)>0;Z[k].visible=on;const t=I.pvo[k];t.visible=on&&(pv[k]|0)>0;if(t.visible)t.scale.setScalar(.8+pv[k]/500*1.2)});
   const n=Math.ceil((lv.h|0)/3);I.houses.forEach((h,i)=>{h.visible=i<n;if(h.visible)h.scale.setScalar(1+((lv.h-1)%3)*.06)});
   const ns=Math.ceil((lv.f|0)/6);I.stables.forEach((s,i)=>s.g.visible=i<ns);
@@ -210,10 +222,14 @@ const swing=(h,s)=>{h.legs[0].rotation.x=s;h.legs[1].rotation.x=-s;h.arms[0].rot
 const myI=makeIsland();place(myI,0);setName(myI,'Твой остров');
 S.rockets=myI.rockets;
 const SAVE='island_save_v1';let resetting=false;
-function save(){if(resetting)return;try{localStorage.setItem(SAVE,JSON.stringify({tu:S.turret?1:0,bt:S.boat?1:0,br:S.bridge?1:0,m:S.money,lv:S.lv,pvo:S.pvo,r:S.rockets.map(r=>r.lvl)}))}catch(e){}}
-function load(){try{const d=JSON.parse(localStorage.getItem(SAVE)||'null');if(!d)return;S.money=+d.m||0;S.bridge=!!d.br;S.boat=!!d.bt;S.turret=!!d.tu;
- K.forEach(k=>{S.lv[k]=Math.min(30,Math.max(0,(d.lv&&d.lv[k])|0));S.pvo[k]=Math.min(500,Math.max(0,(d.pvo&&d.pvo[k])|0))});
- (d.r||[]).slice(0,4).forEach((l,i)=>{const r=myI.addRocket(i);r.lvl=Math.min(500,Math.max(1,l|0));skin(r)})}catch(e){}}
+function snap(){return {tu:S.turret?1:0,bt:S.boat?1:0,br:S.bridge?1:0,m:S.money,lv:S.lv,pvo:S.pvo,r:S.rockets.map(r=>r.lvl),pr:S.pr,lost:S.lost,tun:S.tun,stat:S.stat,ts:Date.now()}}
+function save(){if(resetting)return;try{localStorage.setItem(SAVE,JSON.stringify(snap()))}catch(e){}}
+let localTs=0;
+function applySnap(d){S.money=+d.m||0;S.bridge=!!d.br;S.boat=!!d.bt;S.turret=!!d.tu;S.pr=Math.max(0,d.pr|0);
+ K.forEach(k=>{S.lv[k]=Math.min(30,Math.max(0,(d.lv&&d.lv[k])|0));S.pvo[k]=Math.min(500,Math.max(0,(d.pvo&&d.pvo[k])|0));S.lost[k]=Math.min(30,Math.max(0,(d.lost&&d.lost[k])|0))});
+ ['rate','vel','rad'].forEach(k=>{S.tun[k]=Math.min(10,Math.max(0,(d.tun&&d.tun[k])|0))});S.stat.sk=(d.stat&&d.stat.sk)|0;S.stat.hit=(d.stat&&d.stat.hit)|0;
+ (d.r||[]).slice(0,4).forEach((l,i)=>{const r=myI.rockets[i]||myI.addRocket(i);r.lvl=Math.min(500,Math.max(1,l|0));skin(r)})}
+function load(){try{const d=JSON.parse(localStorage.getItem(SAVE)||'null');if(!d)return;localTs=d.ts||0;applySnap(d)}catch(e){}}
 load();setInterval(save,3000);addEventListener('beforeunload',save);document.addEventListener('visibilitychange',()=>{if(document.hidden)save()});
 const me=mkHuman(new THREE.Color().setHSL(HUE,.7,.5));const hum=me.g;hum.position.set(0,0,8);myI.g.add(hum);
 let target=null,ang=.6,pitch=.58,dist=22,wt=0,ov=false;
@@ -246,7 +262,7 @@ cvs.addEventListener('pointermove',e=>{const p=ptr.get(e.pointerId);if(!p)return
 const pend=e=>{const p=ptr.get(e.pointerId);if(p&&p.mode=='joy'){joy.x=0;joy.y=0}ptr.delete(e.pointerId)};
 cvs.addEventListener('pointerup',pend);cvs.addEventListener('pointercancel',pend);
 cvs.addEventListener('wheel',e=>{dist=Math.min(50,Math.max(8,dist+e.deltaY*.03))});
-addEventListener('keydown',e=>keys[e.code]=1);addEventListener('keyup',e=>keys[e.code]=0);
+addEventListener('keydown',e=>{if(e.target.tagName!='INPUT')keys[e.code]=1});addEventListener('keyup',e=>keys[e.code]=0);
 $('ov').onclick=()=>{ov=!ov};
 $('tex').onclick=()=>{turretMode=false;firing=false;document.body.classList.remove('tm')};
 const fb=$('fire');fb.addEventListener('pointerdown',e=>{e.preventDefault();firing=true});['pointerup','pointercancel','pointerleave'].forEach(ev=>fb.addEventListener(ev,()=>{firing=false}));
@@ -255,14 +271,23 @@ const fb=$('fire');fb.addEventListener('pointerdown',e=>{e.preventDefault();firi
 const A={
  loc(k){const L=LOC[k],lv=S.lv[k];
   if(lv==0){if(PREV[k]&&S.lv[PREV[k]]<30)return;if(S.money>=L.buy){S.money-=L.buy;S.lv[k]=1;if(k!='h')toast('Открыта локация: '+L.n)}}
-  else if(lv<30){const c=upCost(k,lv);if(S.money>=c){S.money-=c;S.lv[k]++}}},
+  else if(lv<30){const c=upCost(k,lv);if(S.money>=c){S.money-=c;S.lv[k]++;S.lost[k]=Math.min(S.lost[k],30-S.lv[k])}}},
  pvo(k){const v=S.pvo[k];if(S.lv[k]<1||v>=500)return;const c=pvoUp(k,v);if(S.money>=c){S.money-=c;S.pvo[k]++}},
  buyRocket(){const n=myI.rockets.length;if(n<4&&S.money>=rockBuy(n)){S.money-=rockBuy(n);myI.addRocket(n)}},
  upRocket(i){const r=S.rockets[i],c=rockUp(r.lvl);if(r.lvl<500&&S.money>=c){S.money-=c;r.lvl++;skin(r)}},
  launch(i){const r=S.rockets[i];if(r.state=='idle'){r.state='fly';r.v=2;r.fl.visible=true;S.money+=launchBonus(r.lvl)}},
  attack(v){const [to,loc]=v.slice(1).split(':'),r=S.rockets.find(r=>r.state=='idle');if(!r||!ws||ws.readyState!==1)return;r.state='fly';r.v=2;r.fl.visible=true;S.money+=launchBonus(r.lvl);ws.send(JSON.stringify({t:'strike',to,loc,l:r.lvl}))},
  copy(){const done=()=>toast('Ссылка скопирована');try{navigator.clipboard.writeText(LINK).then(done,()=>toast('Выдели ссылку и скопируй вручную'))}catch(e){toast('Выдели ссылку и скопируй вручную')}},
- reset(){if(confirm('Сбросить весь прогресс? Это нельзя отменить.')){resetting=true;try{localStorage.removeItem(SAVE)}catch(e){}location.reload()}},
+ reset(){if(confirm('Сбросить весь прогресс? Это нельзя отменить.')){resetting=true;try{localStorage.removeItem(SAVE)}catch(e){}if(ws&&ws.readyState===1)ws.send(JSON.stringify({t:'wipe'}));setTimeout(()=>location.reload(),500)}},
+ repair(k){const c=repairCost(k);if(S.lost[k]>0&&S.money>=c){S.money-=c;S.lv[k]=Math.min(30,S.lv[k]+S.lost[k]);S.lost[k]=0;toast('🔧 Локация отремонтирована')}},
+ prestige(){if(!K.every(k=>S.lv[k]>=30))return;if(!confirm('Начать заново? Деньги, локации, ПВО и уровни ракет сбросятся. Останутся мост, лодка, турель и постоянный бонус +30% к доходу за каждый престиж.'))return;
+  S.pr++;S.money=10;K.forEach(k=>{S.lv[k]=0;S.pvo[k]=0;S.lost[k]=0});S.rockets.forEach(r=>{r.lvl=1;skin(r)});toast('⭐ Престиж '+S.pr+'! Доход ×'+(1+.3*S.pr).toFixed(1))},
+ tun(k){const l=S.tun[k];if(l>=10)return;const c=tunCost(k,l);if(S.money>=c){S.money-=c;S.tun[k]++}},
+ emoji(i){sendChat(['😀','👍','🚀','💥','😂','❤️'][i])},
+ lbBy(k){S.lbBy=k},
+ lbRefresh(){lbReq()},
+ pidCopy(){try{navigator.clipboard.writeText(PID).then(()=>toast('Код скопирован'),()=>toast('Выдели код и скопируй вручную'))}catch(e){toast('Выдели код и скопируй вручную')}},
+ pidSet(){const v=(prompt('Вставь код входа с другого устройства:','')||'').trim();if(!/^[0-9a-f]{16,64}$/i.test(v))return;try{localStorage.setItem('island_pid',v);localStorage.removeItem(SAVE)}catch(e){}resetting=true;location.reload()},
  bridge(){if(S.bridge||!K.every(k=>S.lv[k]>=30)||S.money<BRIDGE_COST)return;S.money-=BRIDGE_COST;S.bridge=true;toast('🌉 Мост построен! Иди по нему к центру острова сокровищ')},
  shield(){if(!S.bridge||!nearGen||S.money<SHIELD_COST)return;if(!ws||ws.readyState!==1){toast('Нет подключения к серверу');return}S.money-=SHIELD_COST;ws.send(JSON.stringify({t:'shield'}))},
  buyBoat(){if(S.boat||S.money<BOAT_COST)return;S.money-=BOAT_COST;S.boat=true;boat.moved=false;toast('⛵ Лодка куплена: она стоит у причала твоего острова')},
@@ -290,7 +315,7 @@ const A={
  musNext(){if(MU.tracks.length)A.musTrack((MU.idx+1)%MU.tracks.length)},
  musPause(){if(MU.src!='ily'){if(MU.tracks.length)A.musTrack(Math.max(MU.idx,0));return}if(au.paused)au.play();else au.pause()},
  vol(d){MU.vol=Math.min(1,Math.max(0,Math.round((MU.vol+d*.1)*10)/10));au.volume=MU.vol},
- tab(t){S.tab=t}
+ tab(t){S.tab=t;if(t=='k'){srvSave();setTimeout(lbReq,500)}}
 };
 document.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(!b||b.disabled)return;const v=b.dataset.i;A[b.dataset.a](v===undefined?undefined:(isNaN(v)?v:+v));ui()});
 
@@ -298,13 +323,16 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(!b
 let last='',lastTabs='';
 function btn(a,txt,cost,i){const ok=S.money>=cost;return `<button class="b" data-a="${a}" ${i!==undefined?`data-i="${i}"`:''} ${ok?'':'disabled'}>${txt}${cost?` — $${fmt(cost)}`:''}</button>`}
 function ui(){
- let h='';
+ let h='';$('chatbar').style.display=S.tab=='c'?'flex':'none';
  if(S.tab=='l'){
+   if(S.pr)h+=`<div class="info">⭐ Престиж ${S.pr} · доход ×${(1+.3*S.pr).toFixed(1)}</div>`;
   K.forEach(k=>{const L=LOC[k],lv=S.lv[k],p=PREV[k];
    if(lv==0){if(p&&S.lv[p]<30)h+=`<div class="info">🔒 ${L.ico} ${L.n}: сначала ${LOC[p].n} до ур. 30</div>`;else h+=btn('loc',`🔓 Открыть: ${L.ico} ${L.n} (+$${fmt(L.inc*INCM)}/с)`,L.buy,k)}
    else if(lv<30)h+=btn('loc',`⬆ ${L.ico} ${L.n} ур. ${lv}/30 · +$${fmt(locInc(k,lv))}/с`,upCost(k,lv),k);
    else h+=`<div class="info">✔ ${L.ico} ${L.n}: макс. ур. 30 · +$${fmt(locInc(k,30))}/с</div>`})
- }else if(S.tab=='r'){
+ K.filter(k=>S.lost[k]>0&&S.lv[k]>0).forEach(k=>{h+=btn('repair',`🔧 Починить ${LOC[k].ico} ${LOC[k].n} (+${S.lost[k]} ур.)`,repairCost(k),k)});
+   if(K.every(k=>S.lv[k]>=30))h+='<button class="b" data-a="prestige">⭐ Престиж: начать заново, +30% дохода навсегда</button>'
+  }else if(S.tab=='r'){
   h+=`<div class="info">Ракеты: ${S.rockets.length}/4 · бонус за запуск зависит от уровня ракеты и твоего дохода</div>`;
   S.rockets.forEach((r,i)=>{h+=`<div class="row">${r.lvl<500?btn('upRocket',`🚀 №${i+1} ур. ${r.lvl}/500`,rockUp(r.lvl),i):`<button class="b" disabled>🚀 №${i+1} МАКС</button>`}<button class="b sm" data-a="launch" data-i="${i}" ${r.state=='idle'?'':'disabled'}>${r.state=='idle'?'Запуск +$'+fmt(launchBonus(r.lvl)):'Полёт…'}</button></div>`});
   if(S.rockets.length<4)h+=btn('buyRocket','➕ Купить ракету (ур. 1)',rockBuy(S.rockets.length));
@@ -327,7 +355,8 @@ function ui(){
   if(!S.turret)h+=btn('buyTurret','🎯 Купить турель',TURRET_COST)+'<div class="info">Турель стоит на башне у края твоего острова, ближе к центральному острову. Ты сам наводишь её и стреляешь по лодкам других игроков.</div>';
   else{h+='<div class="info">🎯 Турель стоит на башне со стороны центра. Наводка — в любую сторону, вверх и вниз. Управление: тяни по экрану — наводка, 🔥 — выстрел (или пробел), стрелки/WASD — тоже наводка.</div>';
    h+=nearTurret?'<button class="b" data-a="turretOn">🎯 Взять управление</button>':'<div class="info">📍 Подойди к башне с турелью (край острова, ближе к центру).</div>'}
- }else if(S.tab=='b'){
+ if(S.turret)[['rate','🔥 Скорострельность'],['vel','💨 Скорость снаряда'],['rad','💥 Радиус взрыва']].forEach(([k,n])=>{const l=S.tun[k];h+=l>=10?`<div class="info">${n}: макс. 10/10</div>`:btn('tun',`${n} ${l}/10`,tunCost(k,l),k)})
+  }else if(S.tab=='b'){
   if(!S.boat)h+=btn('buyBoat','⛵ Купить лодку',BOAT_COST)+'<div class="info">На лодке можно плыть к островам других игроков и высаживаться в гости. Осторожно: чужие турели сбивают лодки.</div>';
   else if(sailing){const nl=!!nearestLand();h+='<div class="info">⛵ Ты в плавании: тап по воде или WASD. Подплыви к острову (👁 — обзор) и высадись.</div>';h+=`<button class="b" data-a="land" ${nl?'':'disabled'}>⚓ Высадиться${nl?'':' (рядом нет острова)'}</button>`}
   else{let on='';for(const [id,r] of remotes)if(r.I===cur)on=r.name;const nb=Math.hypot(tmpV.x-boat.x,tmpV.z-boat.z)<10;
@@ -343,7 +372,19 @@ function ui(){
    h+=`<div class="info">⚡ Энергетический щит: ${rem>0?'активен ещё '+Math.floor(rem/60)+':'+String(rem%60).padStart(2,'0'):'выключен'}</div>`;
    h+='<div class="info">Пока щит работает, он полностью блокирует все ракеты, летящие в твои локации (5 минут). Включается только у установки в центре острова сокровищ.</div>';
    h+=nearGen?btn('shield','⚡ Активировать щит',SHIELD_COST):'<div class="info">📍 Подойди к установке щита в центре острова сокровищ.</div>'}
- }else if(S.tab=='p'){
+ }else if(S.tab=='c'){
+   h+='<div class="row wrap">'+['😀','👍','🚀','💥','😂','❤️'].map((e,i)=>`<button class="b sm" data-a="emoji" data-i="${i}">${e}</button>`).join('')+'</div>';
+   h+=`<div class="info">Канал: ${S.cs=='al'&&myAl?'🤝 альянс':'🌐 все'} (кнопка слева от поля меняет канал)</div>`;
+   if(!chatLog.length)h+='<div class="info">Сообщений пока нет.</div>';
+   chatLog.forEach(c=>{h+=`<div class="info">${c.sc=='al'?'🤝 ':''}<b>${esc(c.n)}</b>: ${esc(c.t)}</div>`})
+  }else if(S.tab=='k'){
+   const by=S.lbBy||'inc';
+   h+='<div class="row wrap">'+[['inc','💰 Доход'],['pw','⚔ Мощь'],['sk','⛵ Лодки']].map(([k,n])=>`<button class="b sm" data-a="lbBy" data-i="${k}"${by==k?' style="background:var(--ac);color:#fff"':''}>${n}</button>`).join('')+'</div>';
+   const L=[...lbData].sort((a,b)=>(b[by]||0)-(a[by]||0)).slice(0,15);
+   if(!L.length)h+='<div class="info">Рейтинг загружается…</div>';
+   L.forEach((p,i)=>{const v=by=='inc'?'$'+fmt(p.inc||0)+'/с':by=='pw'?fmt(p.pw||0):(p.sk||0);h+=`<div class="info">${['🥇','🥈','🥉'][i]||(i+1)+'.'} ${p.pr?'⭐'+p.pr+' ':''}<b>${esc(p.n)}</b> ${p.on?'🟢':''} — ${v}</div>`});
+   h+='<button class="b" data-a="lbRefresh">🔄 Обновить</button>'
+  }else if(S.tab=='p'){
   if(atkLog.length)h+='<div class="info">📜 Последние атаки на тебя:<br>'+atkLog.map(esc).join('<br>')+'</div>';
   h+='<div class="info">Одна ПВО на локацию: сбивает до 4 ракет подряд, потом перезаряжается (1 ракета за 8 с). Чем выше уровень ПВО относительно ракеты, тем больше шанс.</div>';
   K.filter(k=>S.lv[k]>0).forEach(k=>{const v=S.pvo[k],L=LOC[k];h+=v>=500?`<div class="info">🛡 ${L.ico} ${L.n}: ПВО макс. 500</div>`:btn('pvo',`🛡 ${L.ico} ${L.n}: ПВО ур. ${v}/500${v?'':' (построить)'}`,pvoUp(k,v),k)})
@@ -354,8 +395,8 @@ function ui(){
   h+=`<div class="info">Сервер: ${conn?'🟢 подключён':'🔴 нет подключения'} · игроков онлайн: ${online}</div>`;
   h+=`<div class="info">Ссылка на сервер:</div><div class="lnk">${esc(LINK)}</div><button class="b" data-a="copy">📋 Скопировать ссылку</button><button class="b" data-a="reset">🗑 Сбросить прогресс</button>`;
   h+='<div class="info">Отправь эту ссылку друзьям: все, кто её откроет, попадают на один сервер.</div>';
-  h+='<div class="info">💾 Прогресс сохраняется автоматически в этом браузере на этом устройстве.</div>'}}
- const tabs=[['l','🏙 Локации'],['r','🚀 Ракеты'],['p','🛡 ПВО'],['a','🤝 Альянс'],['t','🎯 Турель'],['b','⛵ Лодка'],['w','🌉 Центр'],['s','⚙']].map(t=>`<button class="tab ${S.tab==t[0]?'on':''}" data-a="tab" data-i="${t[0]}">${t[1]}</button>`).join('');
+  h+='<div class="info">💾 Прогресс сохраняется в браузере и на сервере. Код входа (держи в секрете) нужен, чтобы продолжить с другого устройства:</div><div class="lnk">'+esc(PID)+'</div><button class="b" data-a="pidCopy">📋 Скопировать код</button><button class="b" data-a="pidSet">🔑 Ввести код с другого устройства</button>'}}
+ const tabs=[['l','🏙 Локации'],['r','🚀 Ракеты'],['p','🛡 ПВО'],['a','🤝 Альянс'],['t','🎯 Турель'],['b','⛵ Лодка'],['w','🌉 Центр'],['c','💬 Чат'],['k','🏆 Рейтинг'],['s','⚙']].map(t=>`<button class="tab ${S.tab==t[0]?'on':''}" data-a="tab" data-i="${t[0]}">${t[1]}</button>`).join('');
  const all=tabs+'|'+h;if(all==last)return;last=all;if(lastTabs!=tabs){lastTabs=tabs;$('tabs').innerHTML=tabs}$('body').innerHTML=h}
 
 // ---- музыка ----
@@ -414,30 +455,36 @@ function onStrike(m){const from=islandOf(m.from),to=islandOf(m.to),loc=m.loc;if(
  const g=new THREE.Group();g.add(mesh(new THREE.ConeGeometry(.6,1.8,10),0xd32f2f));const f=mesh(new THREE.ConeGeometry(.4,1.6,8),0xff9800,0,-1.5,0);f.rotation.x=Math.PI;g.add(f);g.scale.setScalar(2);scene.add(g);
  const t=remotes.get(m.to),fr=remotes.get(m.from),fn=m.from===myId?'Ты':(fr?fr.name:'Игрок');if(m.to===myId)alertMsg('🚀 '+fn+' запустил ракету по «'+LOC[loc].n+'»!');pushNews('Срочно! Игрок '+(m.from===myId?myName:(fr?fr.name:'неизвестный'))+' запустил ракету по острову игрока '+(m.to===myId?myName:(t?t.name:'неизвестного'))+'. Цель: '+LOC[loc].n+'.');missiles.push({g,a,b,t:0,loc,fn,ic:!!m.ic,sh:!!m.sh,hit:m.to===myId,mine:m.from===myId,l:Math.min(500,Math.max(1,m.l|0)),name:t?t.name:''})}
 function boom(p,c=0xff7a18,sz=10){const m=mesh(new THREE.SphereGeometry(1,16,12),new THREE.MeshBasicMaterial({color:c,transparent:true}));m.position.copy(p);scene.add(m);booms.push({m,t:0,sz})}
-function hitMe(l,loc,fn){const dmg=Math.min(5,Math.ceil(l/100)),L=LOC[loc];let s;if(S.lv[loc]>1){S.lv[loc]=Math.max(1,S.lv[loc]-dmg);s='💥 '+fn+' ударил по «'+L.n+'»! −'+dmg+' ур.'}else s='💥 '+fn+' ударил по «'+L.n+'»!';alertMsg(s);logAtk(s)}
+function hitMe(l,loc,fn){const dmg=Math.min(5,Math.ceil(l/100)),L=LOC[loc];let s;if(S.lv[loc]>1){const a=Math.min(dmg,S.lv[loc]-1);S.lv[loc]-=a;S.lost[loc]=Math.min(30,S.lost[loc]+a);s='💥 '+fn+' ударил по «'+L.n+'»! −'+dmg+' ур.'}else s='💥 '+fn+' ударил по «'+L.n+'»!';alertMsg(s);logAtk(s)}
 function onShot(m){const sI=islandOf(m.id);if(sI){sI.flashT=.1;sI.turFlash.visible=true}
  const mm=mesh(new THREE.SphereGeometry(.4,8,8),new THREE.MeshBasicMaterial({color:0xffe082}));scene.add(mm);
- shots.push({m:mm,o:new THREE.Vector3(...m.o),v:new THREE.Vector3(...m.v),t:0,by:m.id,sent:false})}
+ shots.push({m:mm,o:new THREE.Vector3(...m.o),v:new THREE.Vector3(...m.v),t:0,by:m.id,sent:false,rad:m.rad||3.6})}
 function onSunk(m){pushNews('Лодка игрока '+(m.id===myId?myName:((remotes.get(m.id)||{}).name||'неизвестного'))+' потоплена огнём турели.');if(m.id===myId){boom(new THREE.Vector3(boat.x,0,boat.z),0xff7a18);boat.moved=false;boatSunkUntil=Date.now()+15000;
   if(sailing){sailing=false;cur=myI;myI.g.add(hum);hum.position.set(0,0,8);hum.rotation.set(0,0,0)}toast('💥 Твою лодку сбили! Ремонт 15 секунд')}
- else{const r=remotes.get(m.id);if(r){if(r.boat)boom(r.boat.position.clone(),0xff7a18);r.hide=Date.now()+15000;if(m.by===myId)toast('🎯 Ты потопил лодку игрока '+r.name)}}}
-function applyState(r,d){if(!d)return;r.st=d;r.I.apply(d);r.tx=d.wx||0;r.tz=d.wz||0;r.sail=!!d.sail;
+ else{const r=remotes.get(m.id);if(r){if(r.boat)boom(r.boat.position.clone(),0xff7a18);r.hide=Date.now()+15000;if(m.by===myId){S.stat.sk++;toast('🎯 Ты потопил лодку игрока '+r.name)}}}}
+function applyState(r,d){if(!d)return;r.st=d;r.pr=d.pr|0;r.I.apply(d);r.tx=d.wx||0;r.tz=d.wz||0;r.sail=!!d.sail;
  if(d.bo){if(!r.boat){r.boat=mkBoat(0xef6c00);scene.add(r.boat);r.boat.position.set(d.bx||0,-.25,d.bz||0)}r.bt={x:d.bx||0,z:d.bz||0,ry:d.by||0}}}
 function addRemote(p){if(remotes.has(p.id))return;const I=makeIsland();place(I,p.slot);setName(I,tagged(p.name||'Игрок',p.al));
  const av=mkHuman(new THREE.Color().setHSL(p.c||0,.7,.5));scene.add(av.g);const r={I,av,tx:0,tz:0,name:p.name||'Игрок',al:p.al||null,st:null};remotes.set(p.id,r);applyState(r,p.d);av.g.position.set(r.tx,0,r.tz);I.shieldUntil=Date.now()+(p.sh||0)}
 function dropRemote(id){const r=remotes.get(id);if(r){if(cur===r.I){cur=myI;myI.g.add(hum);hum.position.set(0,0,8);toast('Остров игрока исчез: ты вернулся домой')}scene.remove(r.I.g);scene.remove(r.av.g);if(r.boat)scene.remove(r.boat);remotes.delete(id)}}
 function connect(){
  ws=new WebSocket((location.protocol=='https:'?'wss://':'ws://')+location.host);
- ws.onopen=()=>{conn=true;lastP='';ws.send(JSON.stringify({t:'hello',name:myName,c:+HUE.toFixed(2)}))};
+ ws.onopen=()=>{conn=true;lastP='';ws.send(JSON.stringify({t:'hello',name:myName,c:+HUE.toFixed(2),pid:PID}))};
  ws.onclose=()=>{conn=false;[...remotes.keys()].forEach(dropRemote);online=1;$('on').textContent=1;setTimeout(connect,2000)};
  ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(x){return}
-  if(m.t=='init'){myId=m.id;mySlot=m.slot;place(myI,mySlot);setName(myI,tagged(myName,myAl));m.players.forEach(addRemote)}
+  if(m.t=='init'){myId=m.id;mySlot=m.slot;place(myI,mySlot);setName(myI,tagged(myName,myAl));m.players.forEach(addRemote);(m.chests||[]).forEach(addChest);if(m.event)onEvent(m.event)}
   else if(m.t=='join'){addRemote(m);pushNews('На архипелаге появился новый игрок: '+(m.name||'Игрок')+'.')}
   else if(m.t=='state'){const r=remotes.get(m.id);if(r)applyState(r,m.d)}
   else if(m.t=='leave'){const lr=remotes.get(m.id);if(lr)pushNews('Игрок '+lr.name+' покинул архипелаг.');dropRemote(m.id)}
   else if(m.t=='strike')onStrike(m);
   else if(m.t=='ally'){{const an=m.id===myId?myName:((remotes.get(m.id)||{}).name||'Игрок');pushNews(m.al?'Игрок '+an+' вступил в альянс «'+m.al+'».':'Игрок '+an+' покинул альянс.')}if(m.id===myId){myAl=m.al;setName(myI,tagged(myName,myAl));toast(myAl?'🤝 Ты в альянсе «'+myAl+'»':'Ты вышел из альянса')}else{const r=remotes.get(m.id);if(r){r.al=m.al;relabel(r)}}}
   else if(m.t=='a_invited'){invites.push({al:m.al,fromName:m.fromName,exp:Date.now()+120000});alertMsg('🤝 '+m.fromName+' зовёт тебя в альянс «'+m.al+'» (вкладка 🤝)')}
+  else if(m.t=='load'){const d=m.data;if(d&&(d.ts||0)>localTs){applySnap(d);ui();toast('☁ Прогресс загружен с сервера')}srvReady=true;setTimeout(srvSave,1500)}
+  else if(m.t=='event')onEvent(m);
+  else if(m.t=='chest_new'){addChest(m);alertMsg('💎 На острове сокровищ появился сундук!');pushNews('На острове сокровищ замечен сундук с золотом.')}
+  else if(m.t=='chest_gone'){const c=chests.get(m.id);if(c){scene.remove(c.g);chests.delete(m.id)}if(m.byId===myId){const rw=Math.round(income()*m.secs);S.money+=rw;alertMsg('💎 Ты нашёл сундук! +$'+fmt(rw))}else toast('💎 '+m.by+' забрал сундук')}
+  else if(m.t=='chat')onChat(m);
+  else if(m.t=='lb'){lbData=m.list||[];ui()}
   else if(m.t=='shot')onShot(m);
   else if(m.t=='sunk')onSunk(m);
   else if(m.t=='shield'){pushNews('Над островом игрока '+(m.id===myId?myName:((remotes.get(m.id)||{}).name||'неизвестного'))+' включён энергетический щит.');if(m.id===myId){S.shieldEnd=Date.now()+m.ms;toast('⚡ Щит включён на '+Math.round(m.ms/60000)+' мин')}else{const r=remotes.get(m.id);if(r)r.I.shieldUntil=Date.now()+m.ms}}
@@ -445,15 +492,50 @@ function connect(){
   else if(m.t=='full')toast('Сервер полон (макс. 16 игроков)');
   online=remotes.size+1;$('on').textContent=online}}
 connect();
-setInterval(()=>{if(!ws||ws.readyState!==1||myId===null)return;const st={lv:{...S.lv},pvo:{...S.pvo},br:S.bridge?1:0,r:S.rockets.map(r=>r.lvl),wx:+hum.getWorldPosition(tmpW).x.toFixed(1),wz:+tmpW.z.toFixed(1),sail:sailing?1:0,tu:S.turret?1:0,ty:+tRel.toFixed(2),tp:+tPit.toFixed(2),bo:S.boat?1:0,bx:+boat.x.toFixed(1),bz:+boat.z.toFixed(1),by:+boat.ry.toFixed(2)};const j=JSON.stringify(st);if(j!==lastP){lastP=j;ws.send(JSON.stringify({t:'state',d:st}))}},120);
+setInterval(()=>{if(!ws||ws.readyState!==1||myId===null)return;const st={lv:{...S.lv},pvo:{...S.pvo},br:S.bridge?1:0,r:S.rockets.map(r=>r.lvl),wx:+hum.getWorldPosition(tmpW).x.toFixed(1),wz:+tmpW.z.toFixed(1),sail:sailing?1:0,pr:S.pr,tr:[S.tun.rate,S.tun.vel,S.tun.rad],tu:S.turret?1:0,ty:+tRel.toFixed(2),tp:+tPit.toFixed(2),bo:S.boat?1:0,bx:+boat.x.toFixed(1),bz:+boat.z.toFixed(1),by:+boat.ry.toFixed(2)};const j=JSON.stringify(st);if(j!==lastP){lastP=j;ws.send(JSON.stringify({t:'state',d:st}))}},120);
+
+// ---- окружение, события, сундуки, чат, рейтинг ----
+const SKY_DAY=new THREE.Color(0x9ad4f5),SKY_NIGHT=new THREE.Color(0x0b1430),SKY_EV={gold:new THREE.Color(0xffd36b),storm:new THREE.Color(0x4a525c),meteor:new THREE.Color(0xb5532a)};
+const EV_NAME={gold:'🌟 Золотой дождь: доход ×1.5',storm:'⛈ Шторм: лодки стоят',meteor:'☄️ Метеоритный дождь: на центре падают сундуки'};
+const stars=(()=>{const g=new THREE.BufferGeometry(),p=[];for(let i=0;i<500;i++){const a=Math.random()*6.283,b=Math.random()*1.4+.05,r=1500;p.push(Math.cos(a)*Math.cos(b)*r,Math.sin(b)*r,Math.sin(a)*Math.cos(b)*r)}g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));const o=new THREE.Points(g,new THREE.PointsMaterial({color:0xffffff,size:2,sizeAttenuation:false,transparent:true,fog:false,depthWrite:false}));o.visible=false;o.frustumCulled=false;scene.add(o);return o})();
+const RAIN_N=500,rain=(()=>{const g=new THREE.BufferGeometry(),p=[];for(let i=0;i<RAIN_N;i++)p.push((Math.random()-.5)*80,Math.random()*60,(Math.random()-.5)*80);g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));const o=new THREE.Points(g,new THREE.PointsMaterial({color:0xaec6e8,size:.5,transparent:true,opacity:.7}));o.visible=false;o.frustumCulled=false;scene.add(o);return o})();
+const meteors=[],chests=new Map();let chatLog=[],lbData=[],srvReady=false;
+function applySky(){const d=dayLight(),c=SKY_NIGHT.clone().lerp(SKY_DAY,d);if(ev.k&&Date.now()<ev.until)c.lerp(SKY_EV[ev.k]||c,.5);
+ scene.background.copy(c);scene.fog.color.copy(c);hemi.intensity=.3+.6*d;sun.intensity=.15+.65*d;
+ const a=(dayPhase()-.25)*Math.PI*2;sun.position.set(Math.cos(a)*40,Math.max(6,Math.sin(a)*40+10),20);
+ M(0x81d4fa).emissive.setHex(d<.35?0xffc86b:0);stars.visible=d<.3;stars.material.opacity=Math.min(1,(.3-d)/.3)}
+function spawnMeteor(){const x=(Math.random()-.5)*50,z=(Math.random()-.5)*50,m=mesh(new THREE.SphereGeometry(1.3,8,8),new THREE.MeshBasicMaterial({color:0xff6d00}),x,200,z);scene.add(m);meteors.push({m,x,z,t:0})}
+let mySig='';
+function envTick(now,dt){applySky();stars.position.copy(cam.position);
+ const live=ev.k&&Date.now()<ev.until,d=dayLight(),storm=live&&ev.k=='storm';rain.visible=storm;
+ if(storm){const a=rain.geometry.attributes.position;for(let i=0;i<RAIN_N;i++){let y=a.getY(i)-70*dt;if(y<0)y+=60;a.setY(i,y)}a.needsUpdate=true;rain.position.set(cam.position.x,cam.position.y-30,cam.position.z)}
+ if(live&&ev.k=='meteor'){ev.mt=(ev.mt||0)-dt;if(ev.mt<=0){ev.mt=.8;spawnMeteor()}}
+ for(let i=meteors.length-1;i>=0;i--){const q=meteors[i];q.t+=dt/1.4;q.m.position.y=200*(1-Math.min(1,q.t));if(q.t>=1){boom(new THREE.Vector3(q.x,1,q.z),0xff7a18,8);scene.remove(q.m);meteors.splice(i,1)}}
+ $('evp').textContent=(d>.4?'☀️ День':'🌙 Ночь · панели ×'+solarMul().toFixed(1))+(live?' · '+EV_NAME[ev.k]+' '+Math.ceil((ev.until-Date.now())/1000)+' с':'');
+ const sg=S.pr+'|'+myAl;if(sg!==mySig){mySig=sg;setName(myI,(S.pr?'⭐'+S.pr+' ':'')+tagged(myName,myAl))}
+ remotes.forEach(r=>{const g2=(r.pr|0)+'|'+r.al;if(r.lsig!==g2){r.lsig=g2;setName(r.I,(r.pr?'⭐'+r.pr+' ':'')+tagged(r.name,r.al))}})}
+function onEvent(m){ev.k=m.k;ev.until=Date.now()+m.ms;ev.mt=0;alertMsg(EV_NAME[m.k]||'Событие');pushNews('Событие на архипелаге: '+(EV_NAME[m.k]||m.k)+'.')}
+function addChest(c){if(chests.has(c.id))return;const g=new THREE.Group();g.position.set(c.x,.2,c.z);g.add(mesh(bx(1.8,1,1.2),0x6b4423,0,.5,0));g.add(mesh(bx(1.9,.35,1.3),0xffc400,0,1.15,0));g.add(mesh(bx(.3,.4,.1),0xffffff,0,.9,.62));
+ g.add(mesh(new THREE.CylinderGeometry(.7,.7,40,12),new THREE.MeshBasicMaterial({color:0xffe066,transparent:true,opacity:.25}),0,20,0));scene.add(g);chests.set(c.id,{g,sent:0})}
+function bubble(id,text){const o=id===myId?hum:((remotes.get(id)||{}).av||{}).g;if(!o)return;if(o.bub)o.remove(o.bub);const sp=label(text.slice(0,24));sp.scale.set(6,1.5,1);sp.position.set(0,3.6,0);o.add(sp);o.bub=sp;clearTimeout(o.bt);o.bt=setTimeout(()=>{o.remove(sp);if(o.bub===sp)o.bub=null},6000)}
+function onChat(m){chatLog.unshift({n:m.n,t:m.text,sc:m.sc});if(chatLog.length>40)chatLog.pop();bubble(m.id,m.text);if(S.tab!='c')toast('💬 '+m.n+': '+m.text);else ui()}
+function sendChat(t){t=(t||'').trim();if(!t||!ws||ws.readyState!==1)return;ws.send(JSON.stringify({t:'chat',text:t,scope:S.cs=='al'&&myAl?'al':'all'}))}
+$('cs').onclick=()=>{if(!myAl&&S.cs!='al'){toast('Ты не в альянсе');return}S.cs=S.cs=='al'?'all':'al';$('cs').textContent=S.cs=='al'?'🤝':'🌐';ui()};
+$('csnd').onclick=()=>{sendChat($('ci').value);$('ci').value=''};
+$('ci').addEventListener('keydown',e=>{if(e.key=='Enter'){sendChat($('ci').value);$('ci').value=''}});
+const powerNow=()=>Math.round(K.reduce((a,k)=>a+S.lv[k]*10+S.pvo[k]/5,0)+S.rockets.reduce((a,r)=>a+r.lvl/5,0)+S.pr*200);
+const pubStats=()=>({inc:income(),pw:powerNow(),pr:S.pr,sk:S.stat.sk,hit:S.stat.hit});
+function lbReq(){if(ws&&ws.readyState===1)ws.send(JSON.stringify({t:'lb'}))}
+function srvSave(){if(ws&&ws.readyState===1&&srvReady&&!resetting)ws.send(JSON.stringify({t:'save',data:snap(),pub:pubStats()}))}
+setInterval(srvSave,20000);setInterval(()=>{if(S.tab=='k')lbReq()},20000);document.addEventListener('visibilitychange',()=>{if(document.hidden)srvSave()});
 
 // ---- цикл ----
 function resize(){renderer.setSize(innerWidth,innerHeight);cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix()}
 addEventListener('resize',resize);resize();
 let prev=performance.now(),acc=0;const camT=new THREE.Vector3();
 function loop(now){requestAnimationFrame(loop);const dt=Math.min(.05,(now-prev)/1000);prev=now;
- S.money+=income()*dt;$('m').textContent=fmt(S.money);$('inc').textContent=fmt(income());
- myI.apply({lv:S.lv,pvo:S.pvo,r:S.rockets.map(r=>r.lvl),br:S.bridge,tu:S.turret?1:0,ty:tRel,tp:tPit});myI.shieldUntil=S.shieldEnd;
+ S.money+=income()*dt;envTick(now,dt);$('m').textContent=fmt(S.money);$('inc').textContent=fmt(income());
+ myI.apply({lv:S.lv,pvo:S.pvo,r:S.rockets.map(r=>r.lvl),br:S.bridge,pr:S.pr,tu:S.turret?1:0,ty:tRel,tp:tPit});myI.shieldUntil=S.shieldEnd;
  genRings.forEach((r,i)=>r.rotation.x=Math.PI/2+Math.sin(now/700+i*1.3)*.35);genOrb.scale.setScalar(1+.12*Math.sin(now/300));
  [myI,...[...remotes.values()].map(r=>r.I)].forEach(I=>{
   if(I.Z.f.visible)I.stables.forEach((s,i)=>{if(s.g.visible)s.horse.position.x=Math.sin(now/1500+i*1.7)*.8});
@@ -462,9 +544,9 @@ function loop(now){requestAnimationFrame(loop);const dt=Math.min(.05,(now-prev)/
  coinG.rotation.y+=dt*1.5;bigCoin.position.y=8+Math.sin(now/600)*.5;
  let mx=0,mz=0;if(keys.KeyW||keys.ArrowUp)mz-=1;if(keys.KeyS||keys.ArrowDown)mz+=1;if(keys.KeyA||keys.ArrowLeft)mx-=1;if(keys.KeyD||keys.ArrowRight)mx+=1;mx+=joy.x;mz+=joy.y;
  boat.g.visible=S.boat&&Date.now()>boatSunkUntil;if(S.boat&&!boat.moved&&!sailing)dockBoat();if(turretMode){mx=0;mz=0;target=null}
- if(sailing){let dx=0,dz=0;if(mx||mz){boatTarget=null;const l=Math.hypot(mx,mz);dx=(mx/l)*Math.cos(ang)+(mz/l)*Math.sin(ang);dz=-(mx/l)*Math.sin(ang)+(mz/l)*Math.cos(ang)}
+ if(sailing){const bsp=(ev.k=='storm'&&Date.now()<ev.until)?0:BOAT_SPEED;let dx=0,dz=0;if(mx||mz){boatTarget=null;const l=Math.hypot(mx,mz);dx=(mx/l)*Math.cos(ang)+(mz/l)*Math.sin(ang);dz=-(mx/l)*Math.sin(ang)+(mz/l)*Math.cos(ang)}
   else if(boatTarget){const ex=boatTarget.x-boat.x,ez=boatTarget.z-boat.z,d=Math.hypot(ex,ez);if(d<1.5)boatTarget=null;else{dx=ex/d;dz=ez/d}}
-  if(dx||dz){const nx=boat.x+dx*BOAT_SPEED*dt,nz=boat.z+dz*BOAT_SPEED*dt;if(!blocked(nx,nz)||blocked(boat.x,boat.z)){boat.x=nx;boat.z=nz}else boatTarget=null;boat.ry=Math.atan2(-dx,-dz)}
+  if(dx||dz){const nx=boat.x+dx*bsp*dt,nz=boat.z+dz*bsp*dt;if(!blocked(nx,nz)||blocked(boat.x,boat.z)){boat.x=nx;boat.z=nz}else boatTarget=null;boat.ry=Math.atan2(-dx,-dz)}
   mx=0;mz=0}
  boat.g.position.set(boat.x,-.25+Math.sin(now/400)*.08,boat.z);boat.g.rotation.y=boat.ry;
  let moving=false;const ph=(cur||myI).g.rotation.y,c=Math.cos(ph),s=Math.sin(ph);
@@ -486,16 +568,17 @@ function loop(now){requestAnimationFrame(loop);const dt=Math.min(.05,(now-prev)/
   const n=new THREE.Vector3().lerpVectors(m.a,m.b,t2);n.y+=Math.sin(t2*Math.PI)*60;m.g.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),n.sub(m.g.position).normalize());
   if(m.t>=(m.ic?.8:1)){scene.remove(m.g);missiles.splice(i,1);const L=LOC[m.loc];pushNews(m.sh?'Энергетический щит отразил ракету.':(m.ic?'Система ПВО сбила ракету над островом.':'Прямое попадание: пострадала локация «'+L.n+'».'));
    if(m.ic){boom(m.g.position.clone(),m.sh?0x7fffd4:0x4fc3f7);if(m.hit){const s2=m.sh?'⚡ Щит заблокировал ракету игрока '+m.fn:'🛡 ПВО сбила ракету игрока '+m.fn+' ('+L.n+')';alertMsg(s2);logAtk(s2)}else if(m.mine)toast(m.sh?'⚡ Ракету заблокировал энергетический щит':'🛡 Твою ракету сбила ПВО')}
-   else{boom(m.b);if(m.hit)hitMe(m.l,m.loc,m.fn);else if(m.mine)toast('💥 Попадание: '+(m.name?m.name+', ':'')+L.n+'!')}}}
+   else{boom(m.b);if(m.hit)hitMe(m.l,m.loc,m.fn);else if(m.mine){S.stat.hit++;toast('💥 Попадание: '+(m.name?m.name+', ':'')+L.n+'!')}}}}
  for(let i=booms.length-1;i>=0;i--){const b=booms[i];b.t+=dt*1.2;b.m.scale.setScalar(1+b.t*(b.sz||10));b.m.material.opacity=Math.max(0,1-b.t);if(b.t>=1){scene.remove(b.m);booms.splice(i,1)}}
  hum.getWorldPosition(tmpV);nearGen=Math.hypot(tmpV.x,tmpV.z+22.4)<16;
  if(turretMode){if(keys.KeyA||keys.ArrowLeft)tRel+=dt*1.2;if(keys.KeyD||keys.ArrowRight)tRel-=dt*1.2;if(keys.KeyW||keys.ArrowUp)tPit=Math.min(1.5,tPit+dt*.8);if(keys.KeyS||keys.ArrowDown)tPit=Math.max(-1.5,tPit-dt*.8);
-  fireCd-=dt;if((firing||keys.Space)&&fireCd<=0&&ws&&ws.readyState===1){fireCd=.35;myI.turMuz.getWorldPosition(tmpW);const q=myI.turBar.getWorldQuaternion(new THREE.Quaternion()),d=new THREE.Vector3(0,0,1).applyQuaternion(q).multiplyScalar(SHOT_V);
+  fireCd-=dt;if((firing||keys.Space)&&fireCd<=0&&ws&&ws.readyState===1){fireCd=fireGap();myI.turMuz.getWorldPosition(tmpW);const q=myI.turBar.getWorldQuaternion(new THREE.Quaternion()),d=new THREE.Vector3(0,0,1).applyQuaternion(q).multiplyScalar(shotV());
    ws.send(JSON.stringify({t:'shot',o:[+tmpW.x.toFixed(2),+tmpW.y.toFixed(2),+tmpW.z.toFixed(2)],v:[+d.x.toFixed(2),+d.y.toFixed(2),+d.z.toFixed(2)]}))}}
  for(let i=shots.length-1;i>=0;i--){const sh=shots[i];sh.t+=dt;const p=sh.m.position;p.set(sh.o.x+sh.v.x*sh.t,sh.o.y+sh.v.y*sh.t+.5*SHOT_G*sh.t*sh.t,sh.o.z+sh.v.z*sh.t);
   let end=sh.t>9;if(!end&&p.y<-.5){boom(p.clone(),0x90caf9,3);end=true}
-  if(!end&&sailing&&sh.by!==myId&&!(myAl&&(remotes.get(sh.by)||{}).al===myAl)&&!sh.sent&&p.y<4&&Math.hypot(p.x-boat.x,p.z-boat.z)<3.6){sh.sent=true;end=true;if(ws&&ws.readyState===1)ws.send(JSON.stringify({t:'sink',by:sh.by}))}
+  if(!end&&sailing&&sh.by!==myId&&!(myAl&&(remotes.get(sh.by)||{}).al===myAl)&&!sh.sent&&p.y<4&&Math.hypot(p.x-boat.x,p.z-boat.z)<sh.rad){sh.sent=true;end=true;if(ws&&ws.readyState===1)ws.send(JSON.stringify({t:'sink',by:sh.by}))}
   if(end){scene.remove(sh.m);shots.splice(i,1)}}
+ chests.forEach((c,id)=>{c.g.rotation.y+=dt;if(!sailing&&c.sent<Date.now()&&Math.hypot(tmpV.x-c.g.position.x,tmpV.z-c.g.position.z)<3.2){c.sent=Date.now()+3000;if(ws&&ws.readyState===1)ws.send(JSON.stringify({t:'chest',id}))}});
  nearTurret=!sailing&&cur===myI&&Math.hypot(hum.position.x-TUR_POS[0],hum.position.z-TUR_POS[1])<9;
  const D=ov?560:dist,P=ov?Math.max(pitch,.8):pitch;
  if(ov)camT.set(0,0,0);else hum.getWorldPosition(camT);

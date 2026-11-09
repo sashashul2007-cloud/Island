@@ -3,6 +3,50 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
+const crypto = require('crypto');
+
+// ---- хранилище: Upstash Redis (если заданы переменные) или файлы в папке data ----
+const UP_URL = process.env.UPSTASH_REDIS_REST_URL, UP_TOK = process.env.UPSTASH_REDIS_REST_TOKEN;
+const DATA_DIR = path.join(__dirname, 'data');
+try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch {}
+const fname = k => path.join(DATA_DIR, k.replace(/[^a-z0-9_-]/gi, '_') + '.json');
+async function up(cmd) {
+  const r = await fetch(UP_URL, { method: 'POST', headers: { Authorization: 'Bearer ' + UP_TOK, 'Content-Type': 'application/json' }, body: JSON.stringify(cmd) });
+  return (await r.json()).result;
+}
+async function kvGet(k) { try { if (UP_URL) { const x = await up(['GET', k]); return x ? JSON.parse(x) : null; } return JSON.parse(fs.readFileSync(fname(k), 'utf8')); } catch { return null; } }
+async function kvSet(k, val) { try { if (UP_URL) await up(['SET', k, JSON.stringify(val)]); else fs.writeFileSync(fname(k), JSON.stringify(val)); } catch (e) { console.log('kvSet', e.message); } }
+async function kvDel(k) { try { if (UP_URL) await up(['DEL', k]); else fs.unlinkSync(fname(k)); } catch {} }
+const lb = new Map(); let lbDirty = false;
+kvGet('lb').then(d => { if (d) Object.entries(d).forEach(([k, x]) => lb.set(k, x)); });
+setInterval(() => {
+  if (!lbDirty) return; lbDirty = false;
+  if (lb.size > 500) [...lb.entries()].sort((a, b) => a[1].ts - b[1].ts).slice(0, lb.size - 500).forEach(([k]) => lb.delete(k));
+  kvSet('lb', Object.fromEntries(lb));
+}, 15000);
+
+// ---- события архипелага и сундуки на острове сокровищ ----
+const EVENTS = [['gold', 90000], ['storm', 70000], ['meteor', 60000]];
+let curEv = null, nextEv = Date.now() + 180000, nextChest = Date.now() + 90000, chestSeq = 1;
+const chests = new Map();
+function spawnChest() {
+  if (chests.size >= 6) return;
+  let x, z; do { x = +((Math.random() - 0.5) * 44).toFixed(1); z = +((Math.random() - 0.5) * 44).toFixed(1); } while (Math.hypot(x, z + 22.4) < 6);
+  const c = { id: chestSeq++, x, z, secs: 60 + Math.floor(Math.random() * 180) };
+  chests.set(c.id, c); bc({ t: 'chest_new', id: c.id, x, z });
+}
+function startEvent(k) {
+  const ms = EVENTS.find(e => e[0] === k)[1];
+  curEv = { k, until: Date.now() + ms }; bc({ t: 'event', k, ms });
+  if (k === 'meteor') setTimeout(() => { for (let i = 0; i < 3; i++) spawnChest(); }, ms * 0.5);
+}
+setInterval(() => {
+  const now = Date.now();
+  if (curEv && now > curEv.until) curEv = null;
+  if (!players.size) return;
+  if (now >= nextEv) { startEvent(EVENTS[Math.floor(Math.random() * EVENTS.length)][0]); nextEv = now + (6 + Math.random() * 4) * 60000; }
+  if (now >= nextChest && chests.size < 3) { spawnChest(); nextChest = now + 150000; }
+}, 5000);
 
 const PORT = process.env.PORT || 3000;
 const MAX = 16;
@@ -137,7 +181,9 @@ wss.on('connection', ws => {
   players.set(id, p);
   ws.on('pong', () => { p.alive = true; });
   send(ws, { t: 'init', id, slot: p.slot,
-             players: [...players.values()].filter(q => q !== p && q.ready).map(pub) });
+             players: [...players.values()].filter(q => q !== p && q.ready).map(pub),
+             chests: [...chests.values()].map(({ id, x, z }) => ({ id, x, z })),
+             event: curEv ? { k: curEv.k, ms: curEv.until - Date.now() } : null });
 
   ws.on('message', raw => {
     let m; try { m = JSON.parse(raw); } catch { return; }
@@ -146,6 +192,11 @@ wss.on('connection', ws => {
       p.name = String(m.name || 'Игрок').replace(/[<>&"]/g, '').slice(0, 16) || 'Игрок';
       p.c = clamp(m.c, 0, 1);
       p.ready = true;
+      const pid = String(m.pid || '');
+      if (/^[0-9a-f]{16,64}$/i.test(pid)) {
+        p.key = crypto.createHash('sha256').update(pid).digest('hex').slice(0, 32);
+        kvGet('save:' + p.key).then(d => send(ws, { t: 'load', data: d })).catch(() => send(ws, { t: 'load', data: null }));
+      } else send(ws, { t: 'load', data: null });
       bc({ t: 'join', ...pub(p) }, ws);
     } else if (m.t === 'state' && p.ready) {
       if (now - p.lastState < 80) return;
@@ -156,16 +207,49 @@ wss.on('connection', ws => {
         r: Array.isArray(d.r) ? d.r.slice(0, 4).map(x => clamp(x, 1, 500)) : [],
         br: d.br ? 1 : 0,
         tu: d.tu ? 1 : 0, ty: clamp(d.ty, -7, 7), tp: clamp(d.tp, -1.6, 1.6), wx: clamp(d.wx, -700, 700), wz: clamp(d.wz, -700, 700), sail: d.sail ? 1 : 0,
-        bo: d.bo ? 1 : 0, bx: clamp(d.bx, -700, 700), bz: clamp(d.bz, -700, 700), by: clamp(d.by, -7, 7)
+        bo: d.bo ? 1 : 0, bx: clamp(d.bx, -700, 700), bz: clamp(d.bz, -700, 700), by: clamp(d.by, -7, 7),
+        pr: clamp(d.pr, 0, 999) | 0,
+        tr: Array.isArray(d.tr) ? d.tr.slice(0, 3).map(x => clamp(x, 0, 10) | 0) : [0, 0, 0]
       };
       bc({ t: 'state', id, d: p.d }, ws);
     } else if (m.t === 'shot' && p.ready) {
-      if (!p.d || !p.d.tu || now - (p.lastShot || 0) < 150) return;
+      if (!p.d || !p.d.tu || now - (p.lastShot || 0) < 80) return;
       const o = Array.isArray(m.o) ? m.o.map(Number) : null, vel = Array.isArray(m.v) ? m.v.map(Number) : null;
       if (!o || !vel || o.length !== 3 || vel.length !== 3 || ![...o, ...vel].every(Number.isFinite)) return;
-      if (Math.hypot(...vel) > 140 || Math.hypot(...o) > 800) return;
+      if (Math.hypot(...vel) > 220 || Math.hypot(...o) > 800) return;
       p.lastShot = now;
-      bc({ t: 'shot', id, o, v: vel });
+      bc({ t: 'shot', id, o, v: vel, rad: 3.6 + 0.5 * ((p.d.tr && p.d.tr[2]) || 0) });
+    } else if (m.t === 'chat' && p.ready) {
+      if (now - (p.lastChat || 0) < 1000) return;
+      const text = String(m.text || '').replace(/[<>]/g, '').trim().slice(0, 120);
+      if (!text) return;
+      p.lastChat = now;
+      const scope = m.scope === 'al' && p.al ? 'al' : 'all';
+      const o = { t: 'chat', id, n: p.name, al: p.al || null, sc: scope, text };
+      if (scope === 'al') players.forEach(q => { if (q.al === p.al && q.ws.readyState === 1) q.ws.send(JSON.stringify(o)); });
+      else bc(o);
+    } else if (m.t === 'chest' && p.ready) {
+      const c = chests.get(m.id);
+      if (!c || !p.d || p.d.sail) return;
+      if (Math.hypot((p.d.wx || 0) - c.x, (p.d.wz || 0) - c.z) > 8) return;
+      chests.delete(c.id);
+      bc({ t: 'chest_gone', id: c.id, by: p.name, byId: id, secs: c.secs });
+    } else if (m.t === 'save' && p.ready && p.key) {
+      if (now - (p.lastSave || 0) < 8000 || !m.data) return;
+      if (JSON.stringify(m.data).length > 20000) return;
+      p.lastSave = now;
+      kvSet('save:' + p.key, m.data);
+      const u = m.pub || {};
+      lb.set(p.key, { n: p.name, inc: clamp(u.inc, 0, 1e30), pw: clamp(u.pw, 0, 1e9), pr: clamp(u.pr, 0, 999) | 0,
+                      sk: clamp(u.sk, 0, 1e9) | 0, hit: clamp(u.hit, 0, 1e9) | 0, ts: now });
+      lbDirty = true;
+    } else if (m.t === 'wipe' && p.ready && p.key) {
+      kvDel('save:' + p.key); lb.delete(p.key); lbDirty = true;
+    } else if (m.t === 'lb' && p.ready) {
+      if (now - (p.lastLb || 0) < 2000) return;
+      p.lastLb = now;
+      const on = new Set([...players.values()].map(q => q.key).filter(Boolean));
+      send(ws, { t: 'lb', list: [...lb.entries()].map(([k, x]) => ({ ...x, on: on.has(k) })).sort((a, b) => b.inc - a.inc).slice(0, 200) });
     } else if (m.t === 'sink' && p.ready) {
       const s = players.get(m.by);
       if (!s || s === p || (s.al && s.al === p.al) || !s.lastShot || now - s.lastShot > 12000 || now - (p.lastSunk || 0) < 3000) return;
