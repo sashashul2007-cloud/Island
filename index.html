@@ -239,12 +239,13 @@ function mkBoat(c){const g=new THREE.Group();
  g.add(mesh(bx(.7,.7,.5),0x263238,0,.5,2.7));g.add(mesh(bx(1.6,.25,.7),0x5d4037,0,.7,-1.4));return g}
 const boat={g:mkBoat(0x1565c0),x:0,z:0,ry:0,moved:false};boat.g.visible=false;scene.add(boat.g);
 let cur=myI,sailing=false,boatTarget=null;
+const ctr={g:new THREE.Group()};scene.add(ctr.g);
 function dockBoat(){const v=myI.g.localToWorld(new THREE.Vector3(36.5,0,3.8));boat.x=v.x;boat.z=v.z;boat.ry=myI.g.rotation.y-Math.PI/2}
 function blocked(x,z){if(Math.abs(x)<34&&Math.abs(z)<34)return true;
  for(const I of [myI,...[...remotes.values()].map(r=>r.I)]){const l=I.g.worldToLocal(tmpW.set(x,0,z));if(l.x>30&&l.x<42&&Math.abs(l.z)<5)continue;if(Math.abs(l.x)<33.5&&Math.abs(l.z)<33.5)return true}return false}
-function nearestLand(){let best=null,bd=9;[myI,...[...remotes.values()].map(r=>r.I)].forEach(I=>{const l=I.g.worldToLocal(tmpW.set(boat.x,0,boat.z));const d=Math.max(Math.abs(l.x),Math.abs(l.z))-31;if(d<bd){bd=d;best={I,l:l.clone()}}});return best}
+function nearestLand(){let best=null,bd=9;[myI,ctr,...[...remotes.values()].map(r=>r.I)].forEach(I=>{const l=I.g.worldToLocal(tmpW.set(boat.x,0,boat.z));const d=Math.max(Math.abs(l.x),Math.abs(l.z))-(I===ctr?32:31);if(d<bd){bd=d;best={I,l:l.clone()}}});return best}
 let tRel=0,tPit=.2,turretMode=false,firing=false,fireCd=0,boatSunkUntil=0;const shots=[];
-function walkable(x,z){if(Math.abs(x)<29.5&&Math.abs(z)<29.5)return true;if(cur!==myI||!S.bridge)return false;
+function walkable(x,z){if(cur===ctr)return Math.max(Math.abs(x),Math.abs(z))<30.5;if(Math.abs(x)<29.5&&Math.abs(z)<29.5)return true;if(cur!==myI||!S.bridge)return false;
  if(Math.abs(x)<1.9&&z>28&&z<BR_TO+1)return true;
  const g=myI.g,c=Math.cos(g.rotation.y),s=Math.sin(g.rotation.y),wx=g.position.x+x*c+z*s,wz=g.position.z-x*s+z*c;return Math.abs(wx)<31&&Math.abs(wz)<31}
 let nearGen=false,nearTurret=false;const tmpV=new THREE.Vector3(),tmpW=new THREE.Vector3();
@@ -294,7 +295,8 @@ const A={
  board(){if(sailing||!S.boat)return;if(Date.now()<boatSunkUntil){toast('Лодка ещё чинится');return}if(Math.hypot(tmpV.x-boat.x,tmpV.z-boat.z)>10){toast('Лодка слишком далеко');return}
   boat.moved=true;boat.g.add(hum);hum.position.set(0,.7,.4);hum.rotation.set(0,0,0);sailing=true;cur=null;target=null;boatTarget=null;toast('⛵ Плыви: тап по воде или WASD')},
  land(){const n=nearestLand();if(!sailing||!n){toast('Рядом нет острова');return}const q=v=>Math.max(-27.5,Math.min(27.5,v));
-  n.I.g.add(hum);hum.position.set(q(n.l.x),0,q(n.l.z));hum.rotation.set(0,0,0);sailing=false;cur=n.I;target=null;toast(n.I===myI?'🏠 Ты дома':'🏴‍☠️ Ты в гостях на чужом острове')},
+  n.I.g.add(hum);hum.position.set(q(n.l.x),0,q(n.l.z));hum.rotation.set(0,0,0);sailing=false;cur=n.I;target=null;toast(n.I===myI?'🏠 Ты дома':n.I===ctr?'🏝 Ты на центральном острове':'🏴‍☠️ Ты в гостях на чужом острове')},
+ home(){if(turretMode)return;myI.g.add(hum);hum.position.set(0,0,8);hum.rotation.set(0,0,0);if(sailing)boat.moved=false;sailing=false;cur=myI;target=null;boatTarget=null;toast('🏠 Ты на своём острове')},
  dock(){if(sailing)return;boat.moved=false;dockBoat();toast('⚓ Лодка вернулась к причалу')},
  buyTurret(){if(S.turret||S.money<TURRET_COST)return;S.money-=TURRET_COST;S.turret=true;toast('🎯 Турель установлена на башне со стороны центра')},
  turretOn(){if(!S.turret||!nearTurret||sailing||cur!==myI)return;turretMode=true;target=null;document.body.classList.add('tm')},
@@ -358,12 +360,13 @@ function ui(){
  if(S.turret)[['rate','🔥 Скорострельность'],['vel','💨 Скорость снаряда'],['rad','💥 Радиус взрыва']].forEach(([k,n])=>{const l=S.tun[k];h+=l>=10?`<div class="info">${n}: макс. 10/10</div>`:btn('tun',`${n} ${l}/10`,tunCost(k,l),k)})
   }else if(S.tab=='b'){
   if(!S.boat)h+=btn('buyBoat','⛵ Купить лодку',BOAT_COST)+'<div class="info">На лодке можно плыть к островам других игроков и высаживаться в гости. Осторожно: чужие турели сбивают лодки.</div>';
-  else if(sailing){const nl=!!nearestLand();h+='<div class="info">⛵ Ты в плавании: тап по воде или WASD. Подплыви к острову (👁 — обзор) и высадись.</div>';h+=`<button class="b" data-a="land" ${nl?'':'disabled'}>⚓ Высадиться${nl?'':' (рядом нет острова)'}</button>`}
+  else if(sailing){const nl=!!nearestLand();h+='<div class="info">⛵ Ты в плавании: тап по воде или WASD. Подплыви к любому острову, в том числе центральному (👁 — обзор), и высадись.</div>';h+=`<button class="b" data-a="land" ${nl?'':'disabled'}>⚓ Высадиться${nl?'':' (рядом нет острова)'}</button>`}
   else{let on='';for(const [id,r] of remotes)if(r.I===cur)on=r.name;const nb=Math.hypot(tmpV.x-boat.x,tmpV.z-boat.z)<10;
    if(Date.now()<boatSunkUntil)h+='<div class="info">🔧 Лодку сбили, она чинится у причала.</div>';
-   else{h+=on?`<div class="info">🏴‍☠️ Ты в гостях на острове игрока ${esc(on)}.</div>`:'<div class="info">⛵ Лодка — в воде у причала (или там, где ты её оставил).</div>';
+   else{h+=cur===ctr?'<div class="info">🏝 Ты на центральном острове. Сундуки с сокровищами и генератор щита — здесь.</div>':on?`<div class="info">🏴‍☠️ Ты в гостях на острове игрока ${esc(on)}.</div>`:'<div class="info">⛵ Лодка — в воде у причала (или там, где ты её оставил).</div>';
     h+=nb?'<button class="b" data-a="board">⛵ Сесть в лодку</button>':'<div class="info">Чтобы сесть, подойди к лодке ближе 10 м.</div>';
     h+='<button class="b" data-a="dock">⚓ Вернуть лодку к причалу</button>'}}
+  h+='<button class="b" data-a="home">🏠 Телепорт на мой остров</button>';
  }else if(S.tab=='w'){
   const full=K.every(k=>S.lv[k]>=30);
   if(!S.bridge){if(!full)h+=`<div class="info">🔒 Мост к центру откроется, когда все 5 локаций будут на 30 уровне (сейчас ${K.filter(k=>S.lv[k]>=30).length}/5).</div>`;else h+=btn('bridge','🌉 Построить мост к центру',BRIDGE_COST)}
